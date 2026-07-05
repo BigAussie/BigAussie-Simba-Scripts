@@ -1,6 +1,6 @@
 # BigAussie Simba Scripts 🦘
 
-A collection of advanced, automation scripts written for the Simba framework, utilizing color recognition. 
+A collection of advanced, automation scripts written for the Simba , utilizing color recognition. 
 
 ## 📁 Repository Overview
   * This is a collection of my free scripts, for custom/premium scripts see below.
