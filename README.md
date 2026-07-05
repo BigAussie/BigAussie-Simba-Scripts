@@ -41,7 +41,7 @@ Looking for an edge or a highly specific feature? I offer private premium script
   * Frost Dragons
   * Vorkath
 * **Thieving:**
- * Blackjackking
+  * Blackjackking
 * **Gathering & Skilling:**
   * **Hunter:** Chinchompas & Crab Trapping
   * **Smelting:** AIO Cannonball Smelter (Supports multiple furnaces, including Grimstone Furnace)
