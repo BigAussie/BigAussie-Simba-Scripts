@@ -1,9 +1,19 @@
 {$DEFINE SCRIPT_ID := '91cba4cb-2fe0-4f87-b96d-4b7514d73e4f'}
-{$UNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '14'}
+{$UNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '16'}
 {$IFDEF WINDOWS}{$DEFINE SCRIPT_GUI}{$ENDIF}
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
 {$I WaspLib/optional/handlers/teleports/transport.simba}
+
+{
+----------------------------------------------------------------------------------
+~~~ Need Support? Contact Me ~~~
+Discord ID: big.aussie
+Email: thebigaussie@proton.me
+Github: https://github.com/BigAussie
+----------------------------------------------------------------------------------
+ 
+}
 
 var
   REDNORTHTEAM: Boolean                  = False;

@@ -4,7 +4,15 @@
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
 
-// Maybe add world hopping on player detection?
+{
+----------------------------------------------------------------------------------
+~~~ Need Support? Contact Me ~~~
+Discord ID: big.aussie
+Email: thebigaussie@proton.me
+Github: https://github.com/BigAussie
+----------------------------------------------------------------------------------
+ 
+}
 
 //=============DEFAULT SCRIPT SETTINGS============== // The values below are adjustable in the GUI and don't need to be changed here.
 var
