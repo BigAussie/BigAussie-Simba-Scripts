@@ -27,7 +27,7 @@ A collection of advanced, automation scripts written for the Simba , utilizing c
 
 ## 💎 Premium & Custom Scripts
 
-Looking for an edge or a highly specific feature? I offer private premium scripts and fully customized automation solutions tailored to your exact requirements.
+Looking for an edge or a highly specific feature? I offer private premium scripts and fully customized scripts tailored to your exact requirements.
 
 ### Why Choose Premium Scripts?
 * **Unrestricted Ownership:** All premium scripts are **open-source**. Once you buy a script, you own the code forever—no obfuscation.
@@ -40,6 +40,8 @@ Looking for an edge or a highly specific feature? I offer private premium script
   * Gemstone Crab
   * Frost Dragons
   * Vorkath
+* **Thieving:**
+ * Blackjackking
 * **Gathering & Skilling:**
   * **Hunter:** Chinchompas & Crab Trapping
   * **Smelting:** AIO Cannonball Smelter (Supports multiple furnaces, including Grimstone Furnace)
