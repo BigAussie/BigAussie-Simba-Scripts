@@ -34,24 +34,32 @@ Looking for an edge or a highly specific feature? I offer private premium script
 * **Strictly Limited Slots:** To maintain low user volumes and ensure maximum longevity and security for all users, purchases are capped. Spots are available on a limited, first-come, first-served basis.
 
 ### Current Private Premium Offerings:
+
 * **Combat & Bossing:** 
-  * Vardorvis Slayer
-  * Tormented Demons
-  * Gemstone Crab
-  * Frost Dragons
-  * Vorkath
+    - Vardorvis Slayer
+    - Tormented Demons
+    - Gemstone Crab
+    - Frost Dragons
+    - Vorkath
 * **Thieving:**
-  * Blackjackking
-* **Gathering & Skilling:**
-  * **Hunter:** Chinchompas & Crab Trapping
-  * **Smelting:** AIO Cannonball Smelter (Supports multiple furnaces, including Grimstone Furnace)
-  * **Woodcutting:** Infected Roots Chopper
+    - Blackjackking
+* **Hunter:**
+    - Chinchompas
+    - Crab Trapping
+* **Smelting:**
+    - AIO Cannonball Smelter (Supports multiple furnaces, including Grimstone Furnace)
+* **Woodcutting:**
+    - Infected Roots Chopper
+* **Fletching:**
+    - Vale Totem Mini-Game
 * **Agility:**
-  * Prifddinas Rooftop Course (Includes integrated Birdhouse Runs)
+    - Prifddinas Rooftop Course (Includes integrated Birdhouse Runs)
 * **Sailing:**
-  * AIO Shipwreck Salvager – Supports all shipwrecks with high-alch support
-* **Misc:**
-  * All-in-One (AIO) Bank Stander (Herblore, Crafting, Fletching, etc.)
+    - AIO Shipwreck Salvager (Supports all shipwrecks with high-alch support)
+* **Bank Standing:**
+    - All-in-One (AIO) Bank Stander (Herblore, Crafting, Fletching, etc.)
+
+***
 
 📩 **Inquiries:** Contact me directly to check slot availability, discuss pricing, or check if any slots are available for a specific private script.
 
