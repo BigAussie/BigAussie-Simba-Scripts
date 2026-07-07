@@ -14,14 +14,14 @@ A collection of advanced, automation scripts written for the Simba , utilizing c
 * **`BigAussieArdyIronSuperHeat.simba`** – Superheat iron ore and bank at Ardy
 
 ### ⛏️ Mining & Gathering
-* **`BigAussieCalcifiedMining.simba`** – Automated Calcified Mining
-* **`BigAussieBarroniteMiner.simba`** – Automated Barronite Mining
-* **`BigAussieSaltMiner.simba`** – Automated Salt and Basalt Mining
-* **`BigAussieIronwoodChopper.simba`** – Automated Ironwood Tree Cutter
+* **`BigAussieCalcifiedMining.simba`** – Calcified Mining
+* **`BigAussieBarroniteMiner.simba`** – Barronite Mining
+* **`BigAussieSaltMiner.simba`** – Salt and Basalt Mining
+* **`BigAussieIronwoodChopper.simba`** – Ironwood Tree Cutter
 
 ### 🏃 Minigames & Activities
-* **`BigAussieSquirkin.simba`** – Automated Squirkin Mini-game (kind of dead content now)
-* **`BigAussieTroubleBrewing.simba`** – Automated Trouble Brewing Mini-game (kind of dead content now)
+* **`BigAussieSquirkin.simba`** – Squirkin Mini-game (kind of dead content now)
+* **`BigAussieTroubleBrewing.simba`** – Trouble Brewing Mini-game (kind of dead content now)
 
 ---
 
