@@ -61,7 +61,7 @@ Looking for an edge or a highly specific feature? I offer private premium script
 
 ***
 
-📩 **Inquiries:** Contact me directly to check slot availability, discuss pricing, or check if any slots are available for a specific private script.
+📩 **Inquiries:** Contact me directly to check slot availability, discuss pricing, or check if requests are available for a specific private script.
 
 * **Email:** thebigaussie@proton.me
 * **Discord Server:** https://discord.gg/qsmKs5uKfR
