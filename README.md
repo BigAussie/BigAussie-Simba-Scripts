@@ -69,13 +69,6 @@ Looking for an edge or a highly specific feature? I offer private premium script
 
 ---
 
-## 🚀 Getting Started
-
-### Prerequisites
-1. **Simba 1.4**
-2. **SRL**
-3. **WaspLib**
-
 ## ⚖️ Legal Disclaimer
 
 This project is purely educational and intended for automation research using optical color recognition. 
