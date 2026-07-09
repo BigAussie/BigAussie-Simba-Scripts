@@ -3,6 +3,14 @@
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
 
+{
+----------------------------------------------------------------------------------
+~~~ Need Support? Contact Me ~~~
+Discord ID: big.aussie
+Email: thebigaussie@proton.me
+Github: https://github.com/BigAussie
+----------------------------------------------------------------------------------
+}
 
 begin
   Login.PlayerIndex := 1;

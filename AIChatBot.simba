@@ -5,14 +5,11 @@
 {$I WaspLib/optional/handlers/discord.simba}
 
 {
-
 Visit https://aistudio.google.com/ press get API Key at the top right.
 Enter your API Key in the apikey section below.
 
 Start the script you wish to use, once it's started in Simba press new in the top left, in that new box load this script.
 Hit start on this script and it will begin monitoring the chat box.
-
-
 }
 
 var

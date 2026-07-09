@@ -3,8 +3,16 @@
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
 
-Const
+{
+----------------------------------------------------------------------------------
+~~~ Need Support? Contact Me ~~~
+Discord ID: big.aussie
+Email: thebigaussie@proton.me
+Github: https://github.com/BigAussie
+----------------------------------------------------------------------------------
+}
 
+Const
 // Settings
 EXPERIMENTALWALK = True;
 ITEMSTOKEEP: TRSItemArray := ['Hammer', 'Barronite shards']; //  Items to keep when depositing at bank.
