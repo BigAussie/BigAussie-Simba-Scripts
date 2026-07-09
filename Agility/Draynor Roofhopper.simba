@@ -3,10 +3,10 @@
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
 
-// This is a heavily modified version of Flights Pollinivneach roof-hopper
-// https://villavu.com/forum/showthread.php?t=177756=
-//
-//
+{This script is still in testing, milage may vary}
+
+
+
 // ###These are edited in the GUI and saved to your configuration .ini, you should not need to change these manually.##
 var
   WEBHOOKURL: String                     = '';
