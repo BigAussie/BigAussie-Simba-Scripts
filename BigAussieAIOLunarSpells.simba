@@ -1,5 +1,4 @@
-{$DEFINE SCRIPT_ID := '0757baf6-64b1-4889-9c51-7bc460e1efc6'} 
-{$DEFINE SCRIPT_REVISION := '43'}  
+{$DEFINE SCRIPT_REVISION := '1'}  
 {$IFDEF WINDOWS}{$DEFINE SCRIPT_GUI}{$ENDIF}
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
