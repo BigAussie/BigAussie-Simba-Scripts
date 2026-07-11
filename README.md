@@ -29,7 +29,7 @@ This repository is the free script collection. For premium / custom scripts, see
 * **`Squirkin MiniGame.simba`** — Squirkin (archive / dead content)
 * **`Draynor Agility Course.simba`** — Draynor rooftop course
 * **`Cannonball Smelter.simba`** — Free cannonball smelter
-* 
+
 ---
 
 ## 💎 Premium Scripts
