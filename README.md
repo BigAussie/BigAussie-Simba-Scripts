@@ -1,78 +1,88 @@
-Join the B.A.S.H Discord
-* **Discord Server:** https://discord.gg/qsmKs5uKfR
-
 # BigAussie Simba Scripts 🦘
 
-A collection of my personal scripts written for the Simba, all scripts use Simba and are color scripts, no custom plugins or injection/clients. 
+Color-based Simba scripts for OSRS. Free scripts are open to everyone. Premium and Tester scripts are limited-slot.
 
-## 📁 Repository Overview
-  * This is a collection of my free scripts, for custom/premium scripts see below.
+All scripts use Simba and are color scripts — no custom plugins, injection, or clients.
 
-### 📜 Magic & Skilling Scripts
-* **`BigAussieAIOLunarSpells.simba`** – All-in-One Lunar spellbook.
-* **`BigAussieHumidifyClay.simba`** – Casts humidify clay (My first script here for archive purpose)
-* **`BigAussieArdyIronSuperHeat.simba`** – Superheat iron ore and bank at Ardy
+**Note:** I design these scripts for myself when maxxing or grinding my accounts. I do not cater to gold farmers — you will have little to no success running these on multiple accounts or trying to create a farm.
+
+**Discord:** https://discord.gg/qsmKs5uKfR
+
+---
+
+## 📁 Free Scripts
+
+This repository is the free script collection. For premium / custom scripts, see below.
+
+### 📜 Magic
+* **`AIO Lunar Spells.simba`** — Lunar spellbook skilling
+* **`Ardy Superheat Iron.simba`** — Iron mine + Superheat at Ardougne Monastery
 
 ### ⛏️ Mining & Gathering
-* **`BigAussieCalcifiedMining.simba`** – Calcified Mining
-* **`BigAussieBarroniteMiner.simba`** – Barronite Mining
-* **`BigAussieSaltMiner.simba`** – Salt and Basalt Mining
-* **`BigAussieIronwoodChopper.simba`** – Ironwood Tree Cutter
+* **`Calcified Mining.simba`** — Calcified Mining
+* **`Barronite Miner.simba`** — Barronite Mining
+* **`Salt Miner.simba`** — Salt and Basalt Mining
+* **`Ironwood WoodCutter.simba`** — Ironwood Tree Cutter
 
 ### 🏃 Minigames & Activities
-* **`BigAussieSquirkin.simba`** – Squirkin Mini-game (kind of dead content now)
-* **`BigAussieTroubleBrewing.simba`** – Trouble Brewing Mini-game (kind of dead content now)
+* **`Trouble Brewing Minigame.simba`** — Trouble Brewing
+* **`Squirkin MiniGame.simba`** — Squirkin (archive / dead content)
+* **`Draynor Agility Course.simba`** — Draynor rooftop course
+* **`Cannonball Smelter.simba`** — Free cannonball smelter
+* 
+---
+
+## 💎 Premium Scripts
+
+Open-source after purchase. Limited slots — first come, first served.
+
+### Why Choose Premium?
+* **Unrestricted Ownership:** All scripts are **open-source**. Once you buy a script, you own the code forever — no obfuscation.
+* **Strictly Limited Slots:** Purchases are capped to keep user volumes low and maximize longevity and security. Spots are first-come, first-served.
+
+### Combat
+* Gemstone Crab *(farm + birdhouse runs)*
+* Vardorvis Slayer
+* Tormented Demons
+* Vorkath
+* Frost Dragons
+
+### Skilling
+* Crab Trapping
+* Prifddinas Agility *(+ birdhouses)*
+* Cannonball Smelter
+* Shipwreck Salvager
+* AIO Bank Stander
+* Blackjackking
 
 ---
 
-## 💎 Premium & Custom Scripts
+## 🧪 Currently in Testing
 
-Looking for an edge or a highly specific feature? I offer private premium scripts and fully customized scripts tailored to your exact requirements.
+* AIO Agility
+* AIO Smelter & Jewelry
+* Port Roberts Thieving
+* Chinchompa Hunter
+* Co-Pilot Flipper
+* Infected Roots Chopper
+* Vale Totems
 
-### Why Choose Premium Scripts?
-* **Unrestricted Ownership:** All premium scripts are **open-source**. Once you buy a script, you own the code forever—no obfuscation.
-* **Strictly Limited Slots:** To maintain low user volumes and ensure maximum longevity and security for all users, purchases are capped. Spots are available on a limited, first-come, first-served basis.
+---
 
-### Current Private Premium Offerings:
+## 📩 Access & Inquiries
 
-* **Combat & Bossing:** 
-    - Vardorvis Slayer
-    - Tormented Demons
-    - Gemstone Crab
-    - Frost Dragons
-    - Vorkath
-* **Thieving:**
-    - Blackjackking
-* **Hunter:**
-    - Chinchompas
-    - Crab Trapping
-* **Smelting:**
-    - AIO Cannonball Smelter (Supports multiple furnaces, including Grimstone Furnace)
-* **Woodcutting:**
-    - Infected Roots Chopper
-* **Fletching:**
-    - Vale Totem Mini-Game
-* **Agility:**
-    - Prifddinas Rooftop Course (Includes integrated Birdhouse Runs)
-* **Sailing:**
-    - AIO Shipwreck Salvager (Supports all shipwrecks with high-alch support)
-* **Bank Standing:**
-    - All-in-One (AIO) Bank Stander (Herblore, Crafting, Fletching, etc.)
+Slots, pricing, or custom work:
 
-***
-
-📩 **Inquiries:** Contact me directly to check slot availability, discuss pricing, or check if requests are available for a specific private script.
-
+* **Discord:** [@big.aussie](https://discord.gg/qsmKs5uKfR) · Server: https://discord.gg/qsmKs5uKfR
 * **Email:** thebigaussie@proton.me
-* **Discord Server:** https://discord.gg/qsmKs5uKfR
-* **Discord:** big.aussie
 
 ---
 
-## ⚖️ Legal Disclaimer
+## ⚖️ Legal Disclaimer & Trademark Notice
 
-This project is purely educational and intended for automation research using optical color recognition. 
+This project is purely educational and intended for automation research using optical color recognition.
 
-* **No Affiliation:** This project is completely independent and is **not** affiliated, associated, authorized, endorsed by, or in any way officially connected with Jagex Ltd, RuneScape, Old School RuneScape, or any of their subsidiaries or affiliates. 
+* **No Affiliation:** This project is completely independent and is **not** affiliated, associated, authorized, endorsed by, or in any way officially connected with Jagex Ltd, RuneScape, Old School RuneScape, or any of their subsidiaries or affiliates.
 * **Pure Color Automation:** All scripts contained here are strictly color-based macros running via the Simba framework. They interface purely with standard optical display output and simulated hardware inputs.
 * **User Assumption of Risk:** The use of macro or automation software may violate the Terms of Service of third-party platforms. The author assumes no liability for account penalties, bans, or data loss resulting from the use or misuse of this software.
+* **Trademark Notice:** All game titles, assets, imagery, text, and graphics related to Old School RuneScape and RuneScape are registered trademarks and copyright material of Jagex Ltd. Any in-game screenshots, icons, or visual assets used within this community or repository are property of their respective owners and are utilized here strictly under nominative fair use for identification and educational research purposes.
