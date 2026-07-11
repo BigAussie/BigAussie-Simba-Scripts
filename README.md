@@ -1,12 +1,12 @@
+Join the B.A.S.H Discord
+* **Discord Server:** https://discord.gg/qsmKs5uKfR
+
 # BigAussie Simba Scripts 🦘
 
-A collection of advanced, automation scripts written for the Simba , utilizing color recognition. 
+A collection of my personal scripts written for the Simba, all scripts use Simba and are color scripts, no custom plugins or injection/clients. 
 
 ## 📁 Repository Overview
   * This is a collection of my free scripts, for custom/premium scripts see below.
-
-### 🤖 AI Utilities
-* **`BigAussieAIChatBot.simba`** – An integrated chatbot for conversational responses.
 
 ### 📜 Magic & Skilling Scripts
 * **`BigAussieAIOLunarSpells.simba`** – All-in-One Lunar spellbook.
