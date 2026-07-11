@@ -1,6 +1,14 @@
 {
   "scripts": [
     {
+      "path": "Agility/Draynor Roofhopper.simba",
+      "type": "free",
+      "activities": [
+        "agility"
+      ],
+      "description": "### Draynor Roofhopper\n\nRuns the **Draynor Village** rooftop agility course.\n\n## Features\n- Full course obstacle handling\n- Mark of grace pickup\n- Optional stop-at-level\n- Discord webhook on terminate\n- Mouse teleport / remote input options via GUI\n\n## Requirements\n- Access to the Draynor rooftop course\n- Suitable Agility level for the course\n\n## Notes\n- Marked as early/testing — expect occasional edge cases\n- Configure webhooks and options in the GUI"
+    },
+    {
       "path": "AI Chat Bot.simba",
       "type": "free",
       "activities": [],
@@ -13,14 +21,6 @@
         "magic"
       ],
       "description": "### AIO Lunar Spells\n\nAutomates common Lunar spellbook training methods with GUI settings and optional shopping helpers.\n\n## Spells Supported\n- Bake Pie\n- Humidify\n- Spin Flax\n- Superglass Make\n- Tan Leather\n- String Jewellery\n- Plank Make\n- Recharge Dragonstone\n\n## Features\n- Script speed presets (Slow / Normal / Fast / Turbo)\n- Optional buy runes / raw materials from the GE\n- Optional sell finished noted items\n- Optional birdhouse runs (CanadianJames include)\n- Stop-at-level support\n- Discord webhook notifications\n- WaspLib antiban\n\n## Requirements\n- On the **Lunar spellbook** with the spell unlocked\n- Staff equipped and required runes available\n- Item to process at the **top of bank tab 1** (or inventory as noted in script)\n- If using a rune pouch, start with it in inventory\n\n## Tips\n- GE buy/sell uses above/below market prices — unfilled orders are not auto-cancelled\n- Prefer the GUI for most settings"
-    },
-    {
-      "path": "Agility/Draynor Roofhopper.simba",
-      "type": "free",
-      "activities": [
-        "agility"
-      ],
-      "description": "### Draynor Roofhopper\n\nRuns the **Draynor Village** rooftop agility course.\n\n## Features\n- Full course obstacle handling\n- Mark of grace pickup\n- Optional stop-at-level\n- Discord webhook on terminate\n- Mouse teleport / remote input options via GUI\n\n## Requirements\n- Access to the Draynor rooftop course\n- Suitable Agility level for the course\n\n## Notes\n- Marked as early/testing — expect occasional edge cases\n- Configure webhooks and options in the GUI"
     },
     {
       "path": "Ardy Superheat Iron.simba",

@@ -5,6 +5,17 @@ A collection of advanced, automation scripts written for the Simba , utilizing c
 ## 📁 Repository Overview
   * This is a collection of my free scripts, for custom/premium scripts see below.
 
+### Editing launcher descriptions
+
+Descriptions shown in the B.A.S.H launcher come from `catalog.json`, but you edit them as normal Markdown:
+
+1. Open a file under `descriptions/` (e.g. `descriptions/Barronite Miner.md`)
+2. Edit the text below the `---` frontmatter (path / activities stay at the top)
+3. Run **`Build Catalog.bat`** (or `node build-catalog.mjs`)
+4. Commit both the `.md` file and the generated `catalog.json`, then push
+
+Do **not** hand-edit long text inside `catalog.json` — rebuild it after changing the markdown.
+
 ### 🤖 AI Utilities
 * **`BigAussieAIChatBot.simba`** – An integrated chatbot for conversational responses.
 
