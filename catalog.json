@@ -1,0 +1,74 @@
+{
+  "scripts": [
+    {
+      "path": "AI Chat Bot.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": [],
+      "description": "### AI Chat Bot\n\nIn-game public chat replies using your own AI API key (Gemini, ChatGPT, DeepSeek, or custom).\n\n## Features\n- Natural OSRS-style replies (short, casual, abbreviations)\n- Conversation memory per player\n- Ignore list, interaction limits, and cooldowns\n- Optional Discord webhook notifications\n- Conversation logging\n\n## Setup\n1. Get an API key (e.g. Google AI Studio)\n2. Start your main skilling/PVM script first\n3. Press **New** in Simba, open this script, and start it\n4. Enter your API key / service in the GUI\n\n## Notes\n- Designed to run alongside another script in a second tab\n- Keep responses in character — it will not claim to be AI"
+    },
+    {
+      "path": "AIO Lunar Spells.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["magic"],
+      "description": "### AIO Lunar Spells\n\nAutomates common Lunar spellbook training methods with GUI settings and optional shopping helpers.\n\n## Spells Supported\n- Bake Pie\n- Humidify\n- Spin Flax\n- Superglass Make\n- Tan Leather\n- String Jewellery\n- Plank Make\n- Recharge Dragonstone\n\n## Features\n- Script speed presets (Slow / Normal / Fast / Turbo)\n- Optional buy runes / raw materials from the GE\n- Optional sell finished noted items\n- Optional birdhouse runs (CanadianJames include)\n- Stop-at-level support\n- Discord webhook notifications\n- WaspLib antiban\n\n## Requirements\n- On the **Lunar spellbook** with the spell unlocked\n- Staff equipped and required runes available\n- Item to process at the **top of bank tab 1** (or inventory as noted in script)\n- If using a rune pouch, start with it in inventory\n\n## Tips\n- GE buy/sell uses above/below market prices — unfilled orders are not auto-cancelled\n- Prefer the GUI for most settings"
+    },
+    {
+      "path": "Agility/Draynor Roofhopper.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["agility"],
+      "description": "### Draynor Roofhopper\n\nRuns the **Draynor Village** rooftop agility course.\n\n## Features\n- Full course obstacle handling\n- Mark of grace pickup\n- Optional stop-at-level\n- Discord webhook on terminate\n- Mouse teleport / remote input options via GUI\n\n## Requirements\n- Access to the Draynor rooftop course\n- Suitable Agility level for the course\n\n## Notes\n- Marked as early/testing — expect occasional edge cases\n- Configure webhooks and options in the GUI"
+    },
+    {
+      "path": "Ardy Superheat Iron.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["magic", "smithing", "mining"],
+      "description": "### Ardougne Superheat Iron\n\nMines iron at Ardougne, then **Superheats** ore into iron bars for Magic + Smithing XP.\n\n## Features\n- Mine → Superheat → bank loop\n- Tracks bars made and XP\n- WaspLib antiban\n\n## Requirements\n- **Superheat Item** unlocked (Magic)\n- Nature runes + fire-capable staff / fire runes\n- Access to Ardougne iron rocks and a nearby bank\n- Ardougne cloak / diary teleports help but are not strictly required depending on setup\n\n## Tips\n- Start near the Ardougne mining area with runes ready\n- Keep nature runes stocked in bank"
+    },
+    {
+      "path": "Barronite Miner.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["mining"],
+      "description": "### Barronite Miner\n\nMines barronite in the Cam Torum / dwarven area, with optional smithing of deposits at the anvil and banking.\n\n## Features\n- Mine barronite rocks\n- Walk to anvil to process deposits\n- Bank / deposit handling\n- Keeps hammer + barronite shards by default\n- XP and shard tracking\n\n## Requirements\n- Access to the barronite mining area\n- Hammer for processing deposits (kept in inventory/bank)\n- Suitable Mining level for barronite\n\n## Tips\n- Adjust `ITEMSTOKEEP` if you want to keep extra drops\n- Experimental walker is enabled by default"
+    },
+    {
+      "path": "Calcified Mining.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["mining"],
+      "description": "### Calcified Mining\n\nMines calcified rocks in Cam Torum, with deposit processing and banking options.\n\n## Features\n- Mine calcified rocks (optional ignore waterfalls)\n- Process deposits at the blacksmith / anvil area\n- Power-mining mode (drop)\n- Banking support\n- Tracks shards, moths, and XP\n- Discord webhook on terminate\n\n## Requirements\n- Access to Cam Torum mining sites\n- Hammer for processing deposits\n- Suitable Mining level\n\n## Tips\n- Use the GUI for power-mining, waterfall ignore, and webhook settings\n- Start with a hammer available in inventory or bank"
+    },
+    {
+      "path": "Ironwood WoodCutter.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["woodcutting"],
+      "description": "### Ironwood Woodcutter\n\nChops ironwood trees with banking or powerchop, nest pickup, and optional world hopping.\n\n## Features\n- Multi-tree chopping with special attack support\n- Bank logs or powerchop (drop)\n- Bird nest pickup\n- Prefer populated trees option\n- Custom break override\n- World hopping on an interval\n- Discord hourly + session summary webhooks\n- On-screen progress / profit tracking\n\n## Requirements\n- Access to ironwood trees\n- Suitable Woodcutting level and axe\n- Bank nearby if not powerchopping\n\n## Tips\n- Configure hopping, breaks, and webhooks in the GUI\n- Enable nest pickup if you want nests kept"
+    },
+    {
+      "path": "Salt Miner.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["mining"],
+      "description": "### Salt Miner\n\nMines Weiß / salt rocks and can craft **stony** / **icy basalt** from basalt + salts.\n\n## Features\n- Mine basalt, efh / te / urt salts\n- Optional basalt-only mode\n- Craft stony & icy basalt to configured amounts\n- Banking / noting support\n- GUI-driven targets for each resource\n\n## Requirements\n- Access to the salt mine (Weiss)\n- Suitable Mining level\n- Space for salts / basalt in inventory and bank\n\n## Tips\n- Set desired salt and basalt craft amounts in the GUI\n- Use basalt-only if you do not need salt grinding"
+    },
+    {
+      "path": "Squirkin MiniGame.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["thieving", "minigame"],
+      "description": "### Sorceress's Garden (Sq'irk)\n\nRuns Sorceress's Garden for summer sq'irks — pick, crush to juice, and hand in for Thieving XP.\n\n## Features\n- Enter garden / pick sq'irks\n- Make juice with pestle & mortar + beer glass\n- Hand in to Osman / Selim flow\n- Banking for supplies\n- Energy / run restore handling (won't drink sq'irk juice as energy)\n\n## Requirements\n- Sorceress's Garden unlocked\n- Pestle and mortar + beer glasses in bank\n- Suitable Thieving level for summer garden\n\n## Tips\n- Keep energy items in bank if you want automatic restores\n- Start with glasses and pestle available"
+    },
+    {
+      "path": "Trouble Brewing Minigame.simba",
+      "revision": 1,
+      "type": "free",
+      "activities": ["minigame", "woodcutting", "fletching"],
+      "description": "### Trouble Brewing\n\nPlays Trouble Brewing for Pieces of Eight — woodcutting, water, fletching, and hopper filling.\n\n## Features\n- Join red (north) or blue (south) team\n- Woodcutting / scrapey bark flow\n- Fill water buckets and hoppers\n- Optional power-fletching\n- Tracks Pieces of Eight and resources\n- Discord webhook options\n\n## Requirements\n- Trouble Brewing unlocked (Cabin Fever)\n- Suitable gear for the minigame island\n- Start at / able to reach the Trouble Brewing lobby\n\n## Tips\n- Pick your team and method in the GUI before starting\n- Power-fletching is optional for alternate XP focus"
+    }
+  ]
+}
