@@ -1,11 +1,10 @@
+{$UNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := 'e03d0524-9b81-4cb9-98f6-d9fe1243c778'}
 {$UNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '1'}
 {$IFDEF WINDOWS}{$DEFINE SCRIPT_GUI}{$ENDIF}
 {$I SRL-T/osr.simba}
 {$I WaspLib/osr.simba}
 
 {This script is still in testing, milage may vary}
-
-
 
 // ###These are edited in the GUI and saved to your configuration .ini, you should not need to change these manually.##
 var
@@ -17,9 +16,7 @@ var
   ENABLEREMOTEINPUT: Boolean             = True;
   TELEPORTMOUSE: Boolean                 = False;
   RUNELITEMODE: Boolean                  = False;
-// ###These are edited in the GUI and saved to your configuration .ini, you should not need to change these manually.##
-// ###
-// ###
+
   ActiveTimer: TStopWatch;
 
 Type

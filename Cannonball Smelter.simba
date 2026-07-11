@@ -1,0 +1,1022 @@
+{$UNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := 'c4e8b2a1-9f3d-4c7e-a6b5-1d2e3f4a5b6c'}
+{$UNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '1'}
+{$IFDEF WINDOWS}{$DEFINE SCRIPT_GUI}{$ENDIF}
+{$I SRL-T/osr.simba}
+{$I WaspLib/osr.simba}
+
+{
+----------------------------------------------------------------------------------
+[Free] Cannonball Smelter
+This is the stripped down free version of the Cannonball Smelter.
+For the more premium version, check out the AIO Smelter.
+Need Support? Contact Me
+Discord ID: big.aussie
+Email: thebigaussie@proton.me
+Github: https://github.com/BigAussie
+----------------------------------------------------------------------------------
+}
+
+type
+  CannonBallTypes = (
+    BRONZE_CANNONBALL,
+    IRON_CANNONBALL,
+    STEEL_CANNONBALL,
+    MITHRIL_CANNONBALL,
+    ADAMANT_CANNONBALL,
+    RUNE_CANNONBALL
+  );
+
+var
+  ChosenCannonBallType: CannonBallTypes = STEEL_CANNONBALL;
+
+type
+  EState = (
+    STATE_OPEN_FURNACE,
+    STATE_OPEN_BANK,
+    STATE_WITHDRAW_BARS,
+    STATE_SMELT
+  );
+
+  BallSmelter = record (TBaseBankScript)
+    CurrentState: EState;
+
+    CannonBallItem: TRSitem;
+    BarItem: TRSitem;
+    DoubleAmmoMouldItem: TRSitem;
+    AmmoMouldItem: TRSitem;
+
+    CannonBallBank: TRSBankItem;
+    BarBank: TRSBankItem;
+    DoubleAmmoMouldBank: TRSBankItem;
+    AmmoMouldBank: TRSBankItem;
+    MouldItem: TRSBankItem;
+
+    Furnace: TRSObjectV2;
+
+    BarValue: Int32;
+    CannonBallValue: Int32;
+
+    StartXP: Integer;
+    CurrentXP: Integer;
+    PrevXP: Integer;
+    BallsSmelted: Integer;
+    initialBalls: Integer;
+    ConsecutiveXPFailures: Int32;
+    LastHealthCheck: UInt64;
+
+    ChosenLocation: String;
+
+    AntiBanChance: Double;
+
+    LastLevel: Int32;
+    CurrentLevel: Int32;
+
+    LastSystemUpdateCheck: UInt64;
+    SystemUpdateWarningShown: Boolean;
+
+    UIPosition: TPoint;
+    UIEnabled: Boolean;
+    UIFontSize: Int32;
+    UIBackgroundColor: TColor;
+    UITextColor: TColor;
+    LastImageClear: UInt64;
+  end;
+
+var
+  Timer: TStopWatch;
+
+// Thanks Bootie
+function TRSChat.CheckSystemUpdate(minuteTreshold: Integer): Boolean;
+var
+  b: TBox;
+  s: String;
+  numbers: TExtendedArray;
+begin
+  b := Chat.Bounds;
+  b.X1 += 4;
+  b.Y1 -= 16;
+  b.Y2 := Chat.Bounds.Y1 -1;
+  b.X2 := b.X1 + 140;
+
+  s := OCR.Recognize(
+      b,
+      TOCRColorFilter.Create([65535]),
+      RS_FONT_PLAIN_12
+    );
+
+  if s.Contains('System update') then
+  begin
+    s := s.After(': ');
+    numbers := s.ExtractNumbers();
+    if (length(numbers) > 0) and (numbers[0] <= minuteTreshold) then
+      Result := True;
+  end;
+end;
+
+procedure OnBreakStart(Task: PBreakTask);
+begin
+  WL.Activity.Pause();
+end;
+
+procedure OnBreakFinish(Task: PBreakTask);
+begin
+  WL.Activity.Resume();
+end;
+
+procedure OnSleepStart(Task: PSleepTask);
+begin
+  WL.Activity.Pause();
+end;
+
+procedure OnSleepFinish(Task: PSleepTask);
+begin
+  WL.Activity.Resume();
+end;
+
+procedure TAntiban.TakeBreak(var task: TBreakTask); override;
+var
+  countdown: TCountDown;
+  i: Int32;
+  activeTasks: PAntibanTaskArray;
+begin
+  activeTasks := Self.GetActiveTasks();
+  for i := 0 to High(activeTasks) do
+    activeTasks[i]^.countdown.Pause();
+
+  countdown.Init(Abs(Round(SRL.GaussRand(task.Length, task.Length * task.StdVar))));
+
+  WriteLn('Taking a break for ' + SRL.MsToTime(countdown.TimeRemaining(), TIME_FORMAL));
+
+  if (@Self.OnStartBreak <> nil) then
+    Self.OnStartBreak(@task);
+
+  if Random() < task.LogoutChance then
+  begin
+    WriteLn('Logging out');
+    Logout.ClickLogout();
+  end;
+
+  if Random() < 0.50 then
+    Self.LoseFocus();
+
+  i := 0;
+  while not countdown.IsFinished() do
+  begin
+    if (Inc(i) mod 12 = 0) then
+      WriteLn('Break time remaining: ' + ToString(countdown.TimeRemaining() div 60000) + ' minutes');
+
+    if (@Self.OnBreaking <> nil) then
+      Self.OnBreaking(@task, countdown);
+
+    Wait(Min(countdown.TimeRemaining(), 5 * ONE_SECOND));
+  end;
+
+  WriteLn('Break finished');
+
+  if (@Self.OnFinishBreak <> nil) then
+    Self.OnFinishBreak(@task);
+
+  for i := 0 to High(Self.Breaks) do
+    Self.Breaks[i].NextAtTime += GetTickCount() - (countdown.Timeout - countdown.Length);
+
+  for I := 0 to High(activeTasks) do
+    activeTasks[i]^.countdown.Resume();
+
+  task.NextAtTime := GetTimeRunning() + Abs(SRL.GaussRand(task.Interval, task.Interval * task.StdVar));
+end;
+
+function GetCannonBallName(CannonBallType: CannonBallTypes): String;
+begin
+  case CannonBallType of
+    BRONZE_CANNONBALL: Result := 'Bronze cannonball';
+    IRON_CANNONBALL: Result := 'Iron cannonball';
+    STEEL_CANNONBALL: Result := 'Steel cannonball';
+    MITHRIL_CANNONBALL: Result := 'Mithril cannonball';
+    ADAMANT_CANNONBALL: Result := 'Adamant cannonball';
+    RUNE_CANNONBALL: Result := 'Rune cannonball';
+    else Result := 'Steel cannonball';
+  end;
+end;
+
+function GetBarName(CannonBallType: CannonBallTypes): String;
+begin
+  case CannonBallType of
+    BRONZE_CANNONBALL: Result := 'Bronze bar';
+    IRON_CANNONBALL: Result := 'Iron bar';
+    STEEL_CANNONBALL: Result := 'Steel bar';
+    MITHRIL_CANNONBALL: Result := 'Mithril bar';
+    ADAMANT_CANNONBALL: Result := 'Adamantite bar';
+    RUNE_CANNONBALL: Result := 'Runite bar';
+    else Result := 'Steel bar';
+  end;
+end;
+
+procedure TAntiban.Setup(); override;
+begin
+  Self.Skills := [ERSSkill.Smithing, ERSSkill.TOTAL];
+  Self.MinZoom := 0;
+  Self.MaxZoom := 10;
+
+  Self.OnStartBreak := @OnBreakStart;
+  Self.OnFinishBreak := @OnBreakFinish;
+  Self.OnStartSleep := @OnSleepStart;
+  Self.OnFinishSleep := @OnSleepFinish;
+
+  inherited;
+
+  WriteLn('[ANTIBAN] Using default break system');
+end;
+
+function FormatRoundedNumber(Number: Integer): String;
+begin
+  if Number >= 1000000 then
+    Result := FormatFloat('0.0M', Number / 1000000)
+  else if Number >= 1000 then
+    Result := FormatFloat('0K', Number / 1000)
+  else
+    Result := SRL.FormatNumber(Number);
+end;
+
+procedure BallSmelter.CheckForLevelUp();
+begin
+  Self.CurrentLevel := Stats.GetLevel(ERSSkill.Smithing);
+  if (Self.CurrentLevel > Self.LastLevel) and (Self.LastLevel > 0) then
+  begin
+    WriteLn('[LEVEL UP] Smithing level: ' + IntToStr(Self.CurrentLevel));
+    Self.LastLevel := Self.CurrentLevel;
+  end
+  else if Self.LastLevel = 0 then
+    Self.LastLevel := Self.CurrentLevel;
+end;
+
+procedure BallSmelter.CheckSystemUpdate();
+var
+  CurrentTime: UInt64;
+  SystemUpdateThreshold: Integer;
+begin
+  CurrentTime := GetTickCount();
+
+  if (CurrentTime - Self.LastSystemUpdateCheck) < 30000 then
+    Exit;
+
+  Self.LastSystemUpdateCheck := CurrentTime;
+
+  SystemUpdateThreshold := 15;
+
+  if Chat.CheckSystemUpdate(SystemUpdateThreshold) then
+  begin
+    WriteLn('SYSTEM UPDATE DETECTED! Server going down in ' + IntToStr(SystemUpdateThreshold) + ' minutes or less!');
+
+    if not Self.SystemUpdateWarningShown then
+      Self.SystemUpdateWarningShown := True;
+
+    WriteLn('Logging out safely for system update');
+    Logout.ClickLogout();
+    TerminateScript('System update - safe logout completed');
+  end;
+end;
+
+function BallSmelter.GetCurrentActivity(): String;
+begin
+  case Self.CurrentState of
+    STATE_OPEN_BANK: Result := 'Opening Bank';
+    STATE_WITHDRAW_BARS: Result := 'Withdrawing Bars';
+    STATE_OPEN_FURNACE: Result := 'Opening Furnace';
+    STATE_SMELT: Result := 'Smelting';
+    else Result := 'Unknown';
+  end;
+end;
+
+function BallSmelter.SafeReadXPBar(): Integer;
+var
+  XPValue: Integer;
+  AttemptCount: Int32;
+  ValidReading: Boolean;
+  PreviousValidXP: Integer;
+  XPDifference: Integer;
+  TimeSinceLastRead: UInt64;
+  MaxPossibleGain: Integer;
+begin
+  if (not RSClient.IsLoggedIn) then
+    Exit(Self.PrevXP);
+
+  if RSInterface.IsOpen() then
+    Exit(Self.PrevXP);
+
+  Result := Self.PrevXP;
+  ValidReading := False;
+  AttemptCount := 0;
+
+  if Self.PrevXP > 0 then
+    PreviousValidXP := Self.PrevXP
+  else
+    PreviousValidXP := Self.StartXP;
+
+  while (not ValidReading) and (AttemptCount < 5) do
+  begin
+    Inc(AttemptCount);
+
+    if not XPBar.IsOpen() then
+    begin
+      WriteLn('XP bar not open, attempting to open...');
+      XPBar.Open();
+      Wait(500 + Random(500));
+    end;
+
+    XPValue := XPBar.Read();
+
+    if XPValue <= 0 then
+    begin
+      WriteLn('Invalid XP reading: ', XPValue, ' (zero or negative)');
+    end
+    else if XPValue < 10000 then
+    begin
+      WriteLn('Invalid XP reading: ', XPValue, ' (too low)');
+    end
+    else if (PreviousValidXP > 0) then
+    begin
+      XPDifference := XPValue - PreviousValidXP;
+      TimeSinceLastRead := GetTickCount() - Self.LastHealthCheck;
+
+      MaxPossibleGain := Round((TimeSinceLastRead / 1000.0) * 100);
+      if MaxPossibleGain < 1000 then MaxPossibleGain := 1000;
+
+      if XPDifference > MaxPossibleGain then
+      begin
+        WriteLn('Invalid XP reading: ', XPValue, ' (impossible gain of ', XPDifference, ' XP in ', Round(TimeSinceLastRead/1000), 's)');
+      end
+      else if XPDifference < -1000 then
+      begin
+        WriteLn('Invalid XP reading: ', XPValue, ' (impossible loss of ', Abs(XPDifference), ' XP)');
+      end
+      else
+      begin
+        ValidReading := True;
+        Result := XPValue;
+      end;
+    end
+    else
+    begin
+      ValidReading := True;
+      Result := XPValue;
+    end;
+
+    if not ValidReading then
+    begin
+      if AttemptCount < 3 then
+      begin
+        WriteLn('Rotating camera for xp bar. Is your XP bar visible?!?!');
+        Antiban.RandomRotate();
+        Wait(500 + Random(1000));
+      end
+      else
+      begin
+        WriteLn('Waiting before retry...');
+        Wait(1000 + Random(2000));
+      end;
+    end;
+  end;
+
+  if not ValidReading then
+  begin
+    Inc(Self.ConsecutiveXPFailures);
+    WriteLn('Failed to get valid XP reading after 5 attempts. Consecutive failures: ', Self.ConsecutiveXPFailures);
+
+    if Self.ConsecutiveXPFailures >= 10 then
+    begin
+      WriteLn('CRITICAL ERROR: XP bar reading failed!');
+      WriteLn('XP bar setup must be wrong. Please check your XP bar configuration.');
+      WriteLn('Ensure you have run settings searcher and your XP Bar is setup correctly.');
+      WriteLn('Terminating script.');
+      TerminateScript();
+    end;
+
+    Result := PreviousValidXP;
+  end
+  else
+  begin
+    Self.ConsecutiveXPFailures := 0;
+    Self.PrevXP := Result;
+    Self.LastHealthCheck := GetTickCount();
+  end;
+end;
+
+procedure BallSmelter.DrawUIOverlay(drawBox: TBox; title, status, runtime, xpRate, revision: String; useHeaderColor: Boolean = False);
+var
+  yPos, lineSpacing, headerSpacing: Int32;
+  headerColor: TColor;
+begin
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if not Self.UIEnabled then
+    Exit;
+
+  lineSpacing := Self.UIFontSize + 2;
+  headerSpacing := Self.UIFontSize + 4;
+
+  if useHeaderColor then
+    headerColor := $00D4FF
+  else
+    headerColor := Self.UITextColor;
+
+  RSClient.Image().DrawBoxFilled(drawBox, False, Self.UIBackgroundColor);
+  RSClient.Image().DrawBoxFilled(drawBox.Expand(1), False, Self.UITextColor);
+  RSClient.Image().DrawBoxFilled(drawBox, False, Self.UIBackgroundColor);
+
+  RSClient.Image().SetFontName('Arial');
+  RSClient.Image().SetFontSize(Self.UIFontSize);
+
+  yPos := drawBox.Y1 + 6;
+
+  RSClient.Image().SetFontSize(Self.UIFontSize + 1);
+  RSClient.Image().DrawText(title, Point(drawBox.X1 + 3, yPos), headerColor);
+  yPos += headerSpacing;
+
+  RSClient.Image().SetFontSize(Self.UIFontSize - 1);
+  RSClient.Image().DrawText('Status: ' + status, Point(drawBox.X1 + 3, yPos), Self.UITextColor);
+  yPos += lineSpacing;
+  RSClient.Image().DrawText('Runtime: ' + runtime, Point(drawBox.X1 + 3, yPos), Self.UITextColor);
+  yPos += lineSpacing;
+  RSClient.Image().DrawText('XP/HR: ' + xpRate, Point(drawBox.X1 + 3, yPos), Self.UITextColor);
+  yPos += lineSpacing;
+  RSClient.Image().DrawText('Cannonballs: ' + IntToStr(Self.BallsSmelted), Point(drawBox.X1 + 3, yPos), Self.UITextColor);
+  yPos += lineSpacing;
+  RSClient.Image().DrawText('Script Revision: ' + revision, Point(drawBox.X1 + 3, yPos), Self.UITextColor);
+  yPos += lineSpacing;
+  {$ENDIF}
+end;
+
+procedure BallSmelter.DrawStatusOverlay();
+var
+  statusBox: TBox;
+  currentActivity, title: String;
+  xpPerHour: Int32;
+  runtime: String;
+  fontSize: Int32;
+  lineSpacing, headerSpacing: Int32;
+  requiredHeight, requiredWidth: Int32;
+begin
+  if not Self.UIEnabled then
+    Exit;
+
+  fontSize := Self.UIFontSize;
+  if fontSize < 6 then fontSize := 6;
+  if fontSize > 20 then fontSize := 20;
+
+  lineSpacing := fontSize + 2;
+  headerSpacing := fontSize + 4;
+
+  requiredHeight := 12 + headerSpacing + (lineSpacing * 4) + fontSize - 2;
+  requiredWidth := Round(fontSize * 16) + 15;
+
+  statusBox := Box(Self.UIPosition.X, Self.UIPosition.Y,
+                   Self.UIPosition.X + requiredWidth, Self.UIPosition.Y + requiredHeight);
+
+  currentActivity := Self.GetCurrentActivity();
+  xpPerHour := Round((Self.SafeReadXPBar() - StartXP) / (GetTimeRunning() / 3600000));
+  title := '[Free] Cannonball Smelter';
+  runtime := SRL.MsToTime(GetTimeRunning(), Time_Short);
+
+  Self.DrawUIOverlay(statusBox, title, currentActivity, runtime,
+                     FormatRoundedNumber(xpPerHour),
+                     {$MACRO SCRIPT_REVISION}, True);
+end;
+
+procedure BallSmelter.DrawStatusDisplay();
+begin
+  Self.DrawStatusOverlay();
+end;
+
+function GetRandomRangeShort(): Integer;
+begin
+  Result := srl.SkewedRand(90, 70, 120, 3);
+end;
+
+function GetRandomRangeLong(): Integer;
+begin
+  Result := srl.SkewedRand(1000, 800, 1300, 3);
+end;
+
+procedure BallSmelter.SetupItems();
+var
+  CannonBallName, BarName: String;
+begin
+  CannonBallName := GetCannonBallName(ChosenCannonBallType);
+  BarName := GetBarName(ChosenCannonBallType);
+
+  CannonBallItem := (CannonBallName);
+  BarItem := (BarName);
+  DoubleAmmoMouldItem := ('Double ammo mould');
+  AmmoMouldItem := ('Ammo mould');
+
+  BarBank := TRSBankItem.Setup(BarItem, Bank.QUANTITY_ALL, FALSE);
+  CannonBallBank := TRSBankItem.Setup(CannonBallItem, Bank.QUANTITY_ALL, FALSE);
+  DoubleAmmoMouldBank := TRSBankItem.Setup(DoubleAmmoMouldItem, Bank.QUANTITY_ALL, FALSE);
+  AmmoMouldBank := TRSBankItem.Setup(AmmoMouldItem, Bank.QUANTITY_ALL, FALSE);
+
+  BarValue := ItemData.GetAverage(BarItem);
+  CannonBallValue := ItemData.GetAverage(CannonBallItem);
+end;
+
+procedure BallSmelter.SetupLocations();
+begin
+  writeln('Loading Edgeville');
+  Self.ChosenLocation := 'Edgeville';
+  writeln('Setting up Edgeville furnace');
+  Map.SetupChunkEx([47, 55, 49, 53], [0]);
+  Objects.Setup(Map.Objects(), @Map.Walker);
+  Furnace := Objects.Get('Furnace');
+end;
+
+procedure BallSmelter.OPEN_FURNACE();
+var
+  attempts: int32;
+  waitTime: int32;
+begin
+  if Bank.IsOpen() then
+  begin
+    Bank.Close();
+    WaitUntil(not Bank.IsOpen(), GetRandomRangeShort(), 2400);
+  end;
+
+  waitTime := Random(4600, 4800);
+
+  attempts := 0;
+  while (attempts < 3) and (not Make.IsOpen()) do
+  begin
+    writeln('Opening Furnace.');
+
+    if not Furnace.Hover() then
+    begin
+      writeln('Could not hover furnace, rotating and retrying.');
+      AntiBan.RandomRotate();
+      Inc(attempts);
+      Continue;
+    end;
+
+    if not MainScreen.IsUpText(Furnace.UpText) then
+    begin
+      writeln('Uptext mismatch after hover, retrying.');
+      AntiBan.RandomRotate();
+      Inc(attempts);
+      Continue;
+    end;
+
+    Mouse.Click(MOUSE_LEFT);
+
+    WaitUntil(Minimap.IsPlayerMoving, 100, 500);
+    WaitUntil(not Minimap.IsPlayerMoving(), GetRandomRangeShort(), waitTime);
+
+    if not Make.IsOpen() then
+    begin
+      writeln('Could not open furnace, rotating and retrying.');
+      AntiBan.RandomRotate();
+      Inc(attempts);
+    end;
+  end;
+
+  if not Make.IsOpen() then
+  begin
+    writeln('Could not open furnace after multiple attempts');
+    Logout.ClickLogout();
+    TerminateScript();
+  end;
+end;
+
+procedure BallSmelter.OpenSpecificBank();
+begin
+  writeln('Opening Edgeville Bank.');
+  Banks.Open();
+  WaitUntil(Bank.IsOpen(), GetRandomRangeShort(), 6000);
+end;
+
+procedure BallSmelter.OPEN_BANK();
+var
+  attempts: Int32;
+begin
+  attempts := 0;
+  while (attempts < 3) and (not Bank.IsOpen()) do
+  begin
+    OpenSpecificBank();
+
+    if WaitUntil(Bank.IsOpen(), GetRandomRangeShort(), 3000) then
+      break;
+
+    writeln('Could not find bank, rotate and trying again');
+    AntiBan.RandomRotate();
+    Inc(attempts);
+  end;
+end;
+
+procedure BallSmelter.WITHDRAW_BARS();
+var
+  itemsToKeep: TRSItemArray;
+  BarName: String;
+begin
+  itemsToKeep := [MouldItem.Item, CannonBallItem, BarItem];
+  BarName := GetBarName(ChosenCannonBallType);
+
+  if not Bank.IsOpen() then
+  begin
+    OpenSpecificBank();
+    WaitUntil(Bank.IsOpen(), GetRandomRangeShort(), 6000);
+  end;
+
+  if Bank.IsOpen() then
+  begin
+    if not Inventory.ContainsItem(MouldItem.Item) then
+    begin
+      writeln('Withdrawing Mould.');
+      Bank.WithdrawItem(MouldItem, True);
+      WaitUntil(Inventory.ContainsItem(MouldItem.Item), GetRandomRangeShort(), 5000);
+    end;
+
+    writeln('Withdrawing ' + BarName);
+    Bank.WithdrawItem(BarBank, True);
+    WaitUntil(Inventory.ContainsItem(BarItem), GetRandomRangeShort(), 5000);
+
+    if Inventory.ContainsItem(BarItem) then
+      writeln('Bar withdrawn from bank')
+    else
+      writeln('Bar not withdrawn from bank?');
+  end;
+
+  if Inventory.ContainsRandomItems(itemsToKeep) then
+  begin
+    writeln('Found unwanted item, Depositing all items.');
+    OpenSpecificBank();
+    Bank.DepositRandomItems(itemsToKeep);
+    Bank.WithdrawItem(BarBank, True);
+    Wait(Random(200, 500));
+  end;
+
+  if not Bank.ContainsItem(BarBank) then
+  begin
+    writeln('Out of ' + BarName + '. Logging out and terminating script.');
+    Logout.ClickLogout();
+    TerminateScript();
+  end;
+end;
+
+procedure BallSmelter.SMELT();
+var
+  finalBalls: Integer;
+  lastXPCheckTime: Int64;
+  CannonBallName: String;
+  hoverThreshold: Int32;
+  skipHover: Boolean;
+begin
+  CannonBallName := GetCannonBallName(ChosenCannonBallType);
+
+  if Make.IsOpen() then
+  begin
+    if Make.Select(CannonBallName, Make.QUANTITY_ALL) then
+    begin
+      writeln('Making ' + CannonBallName + '.');
+      initialBalls := Inventory.CountItemStack(CannonBallItem);
+      finalBalls := 0;
+      lastXPCheckTime := GetTickCount();
+
+      skipHover := SRL.Dice(5);
+      hoverThreshold := Random(1, 27);
+      writeln('Pre-hover threshold this cycle: ' + IntToStr(hoverThreshold) + ' bars');
+
+      while Inventory.ContainsItem(BarItem) do
+      begin
+        Self.DrawStatusDisplay();
+        if SRL.Dice(AntiBanChance) and (Inventory.CountItem(BarItem) >= 4) then
+          Self.DoAntiban;
+
+        if Chat.LeveledUp() then
+        begin
+          Chat.HandleLevelUp;
+          Wait(200);
+        end;
+
+        if (GetTickCount() - lastXPCheckTime) > 7000 then
+        begin
+          if not XPBar.EarnedXP() then
+          begin
+            writeln('No XP gained in the last 7 seconds, Possibly from logout/break. Restarting loop.');
+            exit;
+          end
+          else
+          begin
+            lastXPCheckTime := GetTickCount();
+            WL.Activity.Restart();
+          end;
+        end;
+
+        if (not skipHover) and (Inventory.CountItem(BarItem) <= hoverThreshold) then
+        begin
+          if not MainScreen.IsUpText(['Bank']) then
+            Banks.Hover();
+        end;
+      end;
+
+      finalBalls := Inventory.CountItemStack(CannonBallItem);
+      BallsSmelted += (finalBalls - initialBalls);
+      WL.Activity.Restart();
+    end
+    else
+    begin
+      writeln('Failed to select ' + CannonBallName);
+    end;
+  end
+  else
+  begin
+    writeln('Make interface is not open?');
+  end;
+  Self.Report();
+end;
+
+procedure BallSmelter.MouldCheck();
+begin
+  writeln('Checking Inventory for Mould');
+
+  if Inventory.ContainsItem(AmmoMouldBank.Item) then
+  begin
+    writeln('Single Ammo mould found in inventory');
+    MouldItem := AmmoMouldBank;
+  end
+  else if Inventory.ContainsItem(DoubleAmmoMouldBank.Item) then
+  begin
+    writeln('Double ammo mould found in inventory');
+    MouldItem := DoubleAmmoMouldBank;
+  end
+  else
+  begin
+    writeln('No mould found, will check bank');
+
+    OPEN_BANK();
+
+    if Bank.WithdrawItem(DoubleAmmoMouldBank, True) then
+    begin
+      writeln('Double ammo withdrawn from bank');
+      MouldItem := DoubleAmmoMouldBank;
+    end
+    else if Bank.WithdrawItem(AmmoMouldBank, True) then
+    begin
+      writeln('Ammo mould withdrawn from bank');
+      MouldItem := AmmoMouldBank;
+    end
+    else
+    begin
+      writeln('No mould found in bank');
+      if Bank.IsOpen() then
+      begin
+        Bank.Close();
+        WaitUntil(not Bank.IsOpen(), GetRandomRangeShort(), 2400);
+      end;
+      writeln('No mould found in inventory or bank, logging out.');
+      Logout.ClickLogout();
+      TerminateScript();
+    end;
+  end;
+end;
+
+procedure BallSmelter.doAction();
+begin
+  case Self.CurrentState of
+    STATE_OPEN_BANK:
+      begin
+        if not Inventory.ContainsItem(BarItem) then
+        begin
+          OPEN_BANK();
+          Self.CurrentState := STATE_WITHDRAW_BARS;
+        end
+        else
+          Self.CurrentState := STATE_OPEN_FURNACE;
+      end;
+    STATE_WITHDRAW_BARS:
+      begin
+        WITHDRAW_BARS();
+        Self.CurrentState := STATE_OPEN_FURNACE;
+      end;
+    STATE_OPEN_FURNACE:
+      begin
+        if Inventory.ContainsItem(BarItem) then
+        begin
+          OPEN_FURNACE();
+          Self.CurrentState := STATE_SMELT;
+        end
+        else
+          Self.CurrentState := STATE_OPEN_BANK;
+      end;
+    STATE_SMELT:
+      begin
+        if Make.IsOpen() and Inventory.ContainsItem(BarItem) then
+        begin
+          SMELT();
+          Self.CurrentState := STATE_OPEN_BANK;
+        end
+        else if not Inventory.ContainsItem(BarItem) then
+          Self.CurrentState := STATE_OPEN_BANK
+        else
+          Self.CurrentState := STATE_OPEN_FURNACE;
+      end;
+  end;
+end;
+
+procedure BallSmelter.Report();
+var
+  Runtime, XPPerHour, CurrentXP, GainedXP, Profit: Integer;
+  NextBreakTime: Double;
+  i: Int32;
+begin
+  XPBar.EarnedXP();
+  ClearDebug();
+  CurrentXP := Self.SafeReadXPBar();
+  GainedXP := CurrentXP - StartXP;
+  Runtime := Timer.ElapsedTime;
+  XPPerHour := Round(((CurrentXP - StartXP) / Runtime) * 3600);
+  Profit := ((CannonBallValue * 4) - BarValue) * (BallsSmelted div 4);
+
+  WriteLn('==========================================');
+  WriteLn('   [Free] Cannonball Smelter  ');
+  WriteLn('==========================================');
+  WriteLn('  Runtime: ' + PadR(SRL.MsToTime(GetTimeRunning, Time_Short), 10));
+  WriteLn('  Cannonballs: ' + PadR(IntToStr(BallsSmelted), 8) + '  XP: ' + FormatRoundedNumber(GainedXP));
+  WriteLn('  Profit: ' + PadR(FormatRoundedNumber(Profit), 11) + '  Location: Edgeville');
+  WriteLn('------------------------------------------');
+  WriteLn('  XP/Hour: ' + FormatRoundedNumber(Round((GainedXP) / (GetTimeRunning() / 3600000))));
+  WriteLn('  Profit/Hour: ' + FormatRoundedNumber(Round((Profit) / (GetTimeRunning() / 3600000))));
+  WriteLn('  Cannonballs/Hour: ' + IntToStr(Round((BallsSmelted) / (GetTimeRunning() / 3600000))));
+
+  NextBreakTime := 0;
+  for i := 0 to High(Antiban.Breaks) do
+  begin
+    if Antiban.Breaks[i].NextAtTime > NextBreakTime then
+      NextBreakTime := Antiban.Breaks[i].NextAtTime;
+  end;
+
+  WriteLn('------------------------------------------');
+  if NextBreakTime > GetTimeRunning() then
+    WriteLn('   Next Break: ' + SRL.MsToTime(Round(NextBreakTime - GetTimeRunning()), Time_Short))
+  else
+    WriteLn('   Next Break: READY!');
+
+  if Self.SystemUpdateWarningShown then
+    WriteLn('   WARNING: System update detected!');
+
+  WriteLn('==========================================');
+  WriteLn('  Version: ' + {$MACRO SCRIPT_REVISION});
+  WriteLn('==========================================');
+end;
+
+procedure BallSmelter.Init(MaxActions: UInt32; MaxTime: UInt64); override;
+begin
+  inherited;
+
+  if (RSClient.Mode <> ERSClientMode.FIXED) then
+  begin
+    WriteLn('[FAILSAFE] ERROR: You are not using the FIXED CLASSIC screen mode. FIXED CLASSIC mode is the only supported mode for this script.');
+    TerminateScript('Screen mode not supported');
+  end;
+
+  Self.LastSystemUpdateCheck := 0;
+  Self.SystemUpdateWarningShown := False;
+
+  Self.UIEnabled := True;
+  Self.UIPosition.X := 10;
+  Self.UIPosition.Y := 230;
+  Self.UIFontSize := 10;
+  Self.UIBackgroundColor := $2D2D30;
+  Self.UITextColor := $FFFFFF;
+  Self.LastImageClear := 0;
+
+  self.SetupItems();
+  self.SetupLocations();
+
+  Mouse.Speed := Random(16, 20);
+  AntiBanChance := 70;
+  Self.PrevXP := 0;
+  Self.ConsecutiveXPFailures := 0;
+  Self.LastHealthCheck := GetTickCount();
+  StartXP := Self.SafeReadXPBar();
+  Self.PrevXP := StartXP;
+  initialBalls := 0;
+  Self.Report();
+
+  self.MouldCheck();
+  ItemFinder.Similarity := 0.998;
+  Options.SetZoomLevel(0);
+
+  Map.Walker.ScreenWalk := False;
+  Map.Walker.AdaptiveWalk := False;
+end;
+
+procedure BallSmelter.Run(MaxActions: UInt32; MaxTime: UInt64);
+begin
+  Self.Init(MaxActions, MaxTime);
+
+  Self.DrawStatusDisplay();
+
+  repeat
+    if (GetTickCount() - Self.LastImageClear) >= 30000 then
+    begin
+      RSClient.Image.Clear;
+      Self.DrawStatusDisplay();
+      Self.LastImageClear := GetTickCount();
+    end;
+
+    Self.CheckForLevelUp();
+    Self.CheckSystemUpdate();
+
+    Self.doAction();
+
+    if WL.Activity.IsFinished() then
+    begin
+      WriteLn('No activity detected in 5 minutes! Shutting down.');
+      Break;
+    end;
+
+    if SRL.Dice(AntiBanChance) and (not MainScreen.IsUpText(['Bank'])) then
+      Self.DoAntiban;
+
+    Self.DrawStatusDisplay();
+  until Self.ShouldStop();
+end;
+
+var
+  Script: BallSmelter;
+
+{$IFDEF SCRIPT_GUI}
+type
+  TConfig = record(TScriptForm)
+    CannonBallTypeSelector: TLabeledCombobox;
+    SetupInfo2: TLabel;
+    Username: String;
+  end;
+
+procedure TConfig.StartScript(sender: TObject); override;
+var
+  Username: String;
+begin
+  if (Login.PlayerIndex < 0) or (Login.PlayerIndex > High(Login.Players)) then
+    Username := 'NoUserNameSelected'
+  else
+    Username := Login.Players[Login.PlayerIndex].User;
+
+  ChosenCannonBallType := CannonBallTypes(Self.CannonBallTypeSelector.GetItemIndex());
+  Script.ChosenLocation := 'Edgeville';
+
+  WriteINI(Username + ' Cannonball Smelter Settings', 'CannonBallType', IntToStr(Ord(ChosenCannonBallType)), 'Configs/BASettings.ini');
+
+  inherited;
+end;
+
+procedure TConfig.Run(); override;
+var
+  tab: TTabSheet;
+  Username: String;
+begin
+  Self.Setup("Free Cannonball Smelter");
+  Self.Start.SetOnClick(@Self.StartScript);
+  if (Login.PlayerIndex < 0) or (Login.PlayerIndex > High(Login.Players)) then
+    Username := 'NoUserNameSelected'
+  else
+    Username := Login.Players[Login.PlayerIndex].User;
+
+  Self.AddTab('Script Settings');
+  tab := Self.Tabs[High(Self.Tabs)];
+
+  Self.CreateAccountManager(tab);
+
+  with Self.SetupInfo2 do
+  begin
+    Create(tab);
+    SetLeft(TControl.AdjustToDPI(37));
+    SetTop(TControl.AdjustToDPI(155));
+    SetCaption('Bars MUST be on the TOP row of your ALL tab in the bank. Edgeville furnace only.');
+  end;
+
+  ChosenCannonBallType := CannonBallTypes(StrToIntDef(ReadINI(Username + ' [Free] Cannonball Smelter Settings', 'CannonBallType', 'Configs/BASettings.ini'), Ord(STEEL_CANNONBALL)));
+
+  with Self.CannonBallTypeSelector do
+  begin
+    Create(tab);
+    SetCaption('Cannonball Type:');
+    SetLeft(TControl.AdjustToDPI(37));
+    SetTop(Self.SetupInfo2.GetTop() + Self.SetupInfo2.GetHeight() + TControl.AdjustToDPI(7));
+    AddItemArray(['Bronze Cannonballs', 'Iron Cannonballs', 'Steel Cannonballs', 'Mithril Cannonballs', 'Adamant Cannonballs', 'Rune Cannonballs']);
+    SetItemIndex(-1);
+    SetHint('Select the type of cannonballs you wish to make.');
+    SetItemIndex(Ord(ChosenCannonBallType));
+  end;
+
+  Self.CreateAntibanManager();
+  Self.CreateWaspLibSettings();
+
+  inherited;
+end;
+
+var
+  Config: TConfig;
+{$ENDIF}
+
+begin
+  {$IFDEF SCRIPT_GUI}
+  Sync(@Config.Run);
+  {$ENDIF}
+  Script.Run(WLSettings.MaxActions, WLSettings.MaxTime);
+end.
