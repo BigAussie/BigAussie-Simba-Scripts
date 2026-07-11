@@ -37,7 +37,7 @@ This repository is the free script collection. For premium / custom scripts, see
 Open-source after purchase. Limited slots — first come, first served.
 
 ### Why Choose Premium?
-* **Unrestricted Ownership:** All premium scripts are **open-source**. Once you buy a script, you own the code forever — no obfuscation.
+* **Unrestricted Ownership:** All scripts are **open-source**. Once you buy a script, you own the code forever — no obfuscation.
 * **Strictly Limited Slots:** Purchases are capped to keep user volumes low and maximize longevity and security. Spots are first-come, first-served.
 
 ### Combat
@@ -60,6 +60,7 @@ Open-source after purchase. Limited slots — first come, first served.
 ## 🧪 Currently in Testing
 
 * AIO Agility
+* AIO Smelter & Jewelry
 * Port Roberts Thieving
 * Chinchompa Hunter
 * Co-Pilot Flipper
