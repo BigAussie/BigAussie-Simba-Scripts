@@ -1,0 +1,5377 @@
+{$DEFINE SCRIPT_ID := 'bfde3085-80dc-4bd6-870a-8cb3186a938c'}
+{$DEFINE SCRIPT_REVISION := '5'}
+
+{.$DEFINE DEVELOPER_MODE}
+
+{$DEFINE BASH_LAUNCHER}{$DEFINE SRL_UTILS}
+
+{$IFNDEF WS_HINTS}
+  {$IFDEF HINTS}{$DEFINE WS_HINTS}{$ENDIF}
+  {$HINTS OFF}
+{$ENDIF}
+
+const
+  SIMBA_DATA_DIR = AppPath + 'Data' + DirectorySeparator;
+  LAUNCHER_DATA = SIMBA_DATA_DIR + 'bash-launcher' + DirectorySeparator;
+
+  BASH_LOGO_NAME  = 'bash-logo.bmp';
+  GITHUB_SRLT_OWNER    = 'BigWaspBackup';
+  GITHUB_SRLT_REPO     = 'SRL-B';
+  GITHUB_WASPLIB_OWNER = 'BigWaspBackup';
+  GITHUB_WASPLIB_REPO  = 'BashLib';
+  SRLT_INSTALL_DIR     = 'SRL-T';
+  WASPLIB_INSTALL_DIR  = 'WaspLib';
+  BASH_SCRIPTS_REPO   = 'BigAussie/BigAussie-Simba-Scripts';
+  BASH_SCRIPTS_BRANCH = 'main';
+  WASPSCRIPTS_DIR     = ScriptPath + 'waspscripts.com' + DirectorySeparator;
+  BASH_PREMIUM_API    = 'https://bash-premium-api.cdn-gate.workers.dev';
+  BASH_DISCORD_URL    = 'https://discord.gg/qsmKs5uKfR';
+  BASH_LICENSE_HEADER = 'X-License-Key';
+  BASH_INSTALL_HEADER = 'X-Install-Id';
+  BASH_LAUNCHER_FILE  = 'wasp-launcher.simba';
+  BASH_ACTIVITY_IDS = 'combat,magic,prayer,ranged,farming,fishing,hunter,mining,woodcutting,cooking,crafting,fletching,herblore,runecraft,smithing,agility,construction,firemaking,sailing,slayer,thieving,minigame,bossing';
+  BASH_ACTIVITY_LABELS = 'Combat,Magic,Prayer,Ranged,Farming,Fishing,Hunter,Mining,Woodcutting,Cooking,Crafting,Fletching,Herblore,Runecraft,Smithing,Agility,Construction,Firemaking,Sailing,Slayer,Thieving,MiniGames,Bossing';
+  BASH_CATEGORY_IDS = 'all,combat,gathering,production,utility,other';
+  BASH_CATEGORY_LABELS = 'All,Combat,Gathering,Production,Utility,Other';
+  BASH_ACTIVITY_ICON_DIR = 'assets' + DirectorySeparator + 'activities' + DirectorySeparator;
+  BASH_ASSETS_DIR = LAUNCHER_DATA + 'assets' + DirectorySeparator;
+  BASH_ASSETS_RAW =
+    'https://raw.githubusercontent.com/' + GITHUB_WASPLIB_OWNER + '/' + GITHUB_WASPLIB_REPO +
+    '/master/utils/assets/';
+
+type
+  TSRL = record IsSetup: Boolean; end;
+
+var
+  SRL: TSRL;
+  ScriptName: String := ExtractFileName(ScriptFile).Before(ExtractFileExt(ScriptFile));
+
+{$IFNDEF SRL_TIME_INCLUDED}
+{$DEFINE SRL_TIME_INCLUDED}
+
+function TSRL.TimeStamp(): String;
+var
+  Time: Int64;
+  Hours, Mins, Secs, Millis: Int32;
+begin
+  Time := GetTimeRunning();
+
+  Hours  := Time div 3600000;
+  Time   := Time mod 3600000;
+  Mins   := Time div 60000;
+  Time   := Time mod 60000;
+  Secs   := Time div 1000;
+  Millis := Time mod 1000;
+
+  Result := Format('[%.2d:%.2d:%.2d:%.3d]', [Hours, Mins, Secs, Millis]);
+end;
+
+{$IFNDEF SRL_FILE_INCLUDED}
+{$DEFINE SRL_FILE_INCLUDED}
+
+function DeleteFiles(const directory: String; skip: TStringArray = []): Boolean;
+  function _SkipFile(dir: String): Boolean;
+  var
+    s: String;
+  begin
+    for s in skip do
+      if dir.Contains(s) then
+        Exit(True);
+  end;
+
+var
+  f: String;
+begin
+  for f in FindFiles(directory, True) do
+  begin
+    if _SkipFile(f) then
+      Continue;
+
+    if not DeleteFile(f) then
+      Exit;
+  end;
+
+  Result := True;
+end;
+
+function DeleteSubDirectories(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;
+
+  function _SkipDirectory(dir: String): Boolean;
+  var
+    s: String;
+  begin
+    for s in skip do
+      if dir.Contains(s) then
+        Exit(True);
+  end;
+
+  function _GetParent(dir: String): String;
+  var
+    strings: TStringArray;
+  begin
+    strings := dir.Explode(DirectorySeparator);
+    SetLength(strings, High(strings));
+    Result := strings.Merge(DirectorySeparator);
+  end;
+
+var
+  directories, parents: TStringArray;
+  i: Int32;
+begin
+  directories := FindDirectories(directory, True);
+
+  while directories <> [] do
+  begin
+    for i := High(directories) downto 0 do
+    begin
+      if _SkipDirectory(directories[i]) then
+      begin
+        parents += _GetParent(directories[i]);
+        Delete(directories, i, 1);
+        deleteRoot := False;
+        Continue;
+      end;
+
+      if not parents.Contains(directories[i]) and not DeleteDirectory(directories[i], False) then
+        Exit;
+      Delete(directories, i, 1);
+    end;
+  end;
+
+  Result := not deleteRoot or DeleteDirectory(directory, False);
+end;
+
+function RMDir(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;
+begin
+  if not DeleteFiles(directory, skip) then
+    Exit;
+
+  Result := DeleteSubDirectories(directory, deleteRoot, skip);
+end;
+
+function RMDir(path: String): Boolean; overload;
+begin
+  Result := RMDir(path, True, []);
+end;
+
+{$IFNDEF SRL_STRING_INCLUDED}
+{$DEFINE SRL_STRING_INCLUDED}
+
+const
+  STR_WHITESPACE = #9#10#11#12#13#32;
+
+function String.Contains(subString: String): Boolean; constref;
+begin
+  Result := System.Pos(subString, Self) > 0;
+end;
+
+function String.StartsWith(Prefix: String): Boolean; constref;
+begin
+  Result := System.Pos(Prefix, Self) = 1;
+end;
+
+function String.EndsWith(Suffix: String): Boolean; constref;
+var
+  i,l: Int32;
+begin
+  if Length(Suffix) > Length(Self) then
+    Exit(False);
+  Result := True;
+  l := Length(Self);
+  for i:=1 to Length(Suffix) do
+    if (Suffix[i] <> Self[l-Length(Suffix)+i]) then
+      Exit(False);
+end;
+
+function String.After(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Inc(p, Length(SubStr));
+  Result := Copy(Self, p, Length(Self) - p + 1);
+end;
+
+function String.Before(SubStr: String): String; constref;
+var
+  p: UInt32;
+begin
+  p := System.Pos(SubStr, Self);
+  if (p = 0) then Exit(Self);
+  Result := Copy(Self, 1, p - 1);
+end;
+
+function String.Replace(SubStr, ReplaceStr: String; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
+begin
+  Result := StringReplace(Self, SubStr, ReplaceStr, Flags);
+end;
+
+function String.ReplaceAll(SubStrReplaceStrArray: array of TStringArray; Flags: TReplaceFlags=[rfReplaceAll]): String; constref;
+var
+  i: Int32;
+begin
+  Result := Self;
+  for i := 0 to High(SubStrReplaceStrArray) do
+  begin
+    if Length(SubStrReplaceStrArray[i]) <> 2 then
+      raise 'SubStrReplaceStrArray children should have only 2 elements, a SubStr and a ReplaceStr.';
+
+    Result := StringReplace(Result, SubStrReplaceStrArray[i,0], SubStrReplaceStrArray[i,1], Flags);
+  end;
+end;
+
+function String.Split(delimiter: String): TStringArray; constref;
+begin
+  Result := System.Explode(delimiter, Self);
+end;
+
+function String.Explode(Delimiter: String): TStringArray; constref;
+begin
+  Result := System.Explode(Delimiter, Self);
+end;
+
+function String.Trim(chars:String = STR_WHITESPACE): String; constref;
+var Lo,Hi: UInt32 = 1;
+begin
+  Hi:=Length(Self);
+  while (Lo <= Hi) and (System.Pos(Self[Lo],Chars) <> 0) do Inc(Lo);
+  while (Hi >= 1)  and (System.Pos(Self[Hi],Chars) <> 0) do Dec(Hi);
+  Result := Copy(Self, Lo, Hi-Lo+1);
+end;
+
+{$IFNDEF SRL_STRINGARRAY_INCLUDED}
+{$DEFINE SRL_STRINGARRAY_INCLUDED}
+
+function TStringArray.Find(const value: String): Int32; constref;
+begin
+  for Result := 0 to High(Self) do
+    if value = Self[Result] then
+      Exit;
+  Result := -1;
+end;
+
+function TStringArray.Contains(const value: String): Boolean; constref;
+begin
+  Result := Self.Find(value) > -1;
+end;
+
+function TStringArray.Merge(glue: String = ''): String; constref;
+var
+  i: Int32;
+begin
+  if Length(Self) = 0 then Exit;
+
+  Result := Self[0];
+  for i := 1 to High(Self) do
+    Result += glue + Self[i];
+end;
+
+{$IFNDEF WS_UTILS_INCLUDED}
+
+{$DEFINE WS_UTILS_INCLUDED}
+
+procedure TerminateScript(reason: String); overload;
+begin
+  WriteLn('Terminating: ' + reason);
+  TerminateScript();
+end;
+
+procedure DebugLn(name, text: String);
+begin
+  WriteLn(SRL.TimeStamp() + ':[' + name + ']: ' + text);
+end;
+
+function TJSONArray.High(): Int32;
+begin
+  if Self = nil then
+    Exit(-1);
+  Result := Self.length()-1;
+end;
+
+{$IFNDEF WS_ASYNC_INCLUDED}
+{$DEFINE WS_ASYNC_INCLUDED}
+
+type
+  EMonitorState = (NONE, DOWNLOAD, UNZIP, CLEAN);
+
+  TMonitor = record
+    Package: String;
+    CurrentFile: String;
+    State: EMonitorState;
+    IsSetup: Boolean;
+    StartedAt: UInt64;
+
+    Caption: TLabel;
+    Button: TButton;
+    Timer: TTimer;
+  end;
+
+  TWaspAsync = record
+    Path: String;
+  end;
+
+procedure TWaspAsync.Write(name, content: String);
+begin
+  if not WriteFileContents(Self.Path + name, content, False) then
+    TerminateScript('WaspAsync: Failed to write async file: ' + name);
+end;
+
+procedure TWaspAsync.Run(name: String; params: TStringArray);
+begin
+  if not name.EndsWith('.simba') then
+    name += '.simba';
+  RunScript(Self.Path + name, params);
+end;
+
+function TWaspAsync.GetDownloaderContent(): String;
+begin
+  Result += "var" + LineEnding;
+  Result += "  timeout: TTimer;" + LineEnding;
+  Result += "  http: Int32;" + LineEnding;
+  Result += "  url, pkg, dest, failPath, donePath: String;" + LineEnding;
+  Result += "  code: Int32;" + LineEnding;
+  Result += "  t: UInt64;" + LineEnding;
+  Result += "  ok: Boolean;" + LineEnding + LineEnding;
+  Result += "procedure OnTimer({$H-}sender: TObject);{$H+}" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Still downloading ', pkg, '...');" + LineEnding + LineEnding;
+  Result += "  if GetTickCount() > t then" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Download is taking a long time. If rate limited, wait ~1 hour and retry.');" + LineEnding;
+  Result += "    t := GetTickCount() + 120000;" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  timeout.setEnabled(False);" + LineEnding;
+  Result += "  timeout.Free();" + LineEnding;
+  Result += "  FreeHTTPClient(http);" + LineEnding;
+  Result += "  if ok then" + LineEnding;
+  Result += "    CloseFile(CreateFile(donePath))" + LineEnding;
+  Result += "  else" + LineEnding;
+  Result += "    CloseFile(CreateFile(failPath));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure RunTimer();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  timeout.setOnTimer(@OnTimer);" + LineEnding;
+  Result += "  timeout.setEnabled(True);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  url := GetProcessParameter('url');" + LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding;
+  Result += "  dest := GetProcessParameter('destination');" + LineEnding;
+  Result += "  donePath := {$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.done';" + LineEnding;
+  Result += "  failPath := {$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(pkg) + '.fail';" + LineEnding;
+  Result += "  ok := False;" + LineEnding + LineEnding;
+  Result += "  if FileExists(donePath) then DeleteFile(donePath);" + LineEnding;
+  Result += "  if FileExists(failPath) then DeleteFile(failPath);" + LineEnding + LineEnding;
+  Result += "  if (url = '') or (dest = '') then" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Missing download URL or destination (often rate-limited version lookup).');" + LineEnding;
+  Result += "    CloseFile(CreateFile(failPath));" + LineEnding;
+  Result += "    TerminateScript();" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  timeout.Init(nil);" + LineEnding;
+  Result += "  timeout.SetName('downloader_timeout');" + LineEnding;
+  Result += "  timeout.SetInterval(20000);" + LineEnding;
+  Result += "  http := InitializeHTTPClient(True);" + LineEnding;
+  Result += "  SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');" + LineEnding;
+  Result += "  Sync(@RunTimer);" + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncDownloader]: Downloading ', pkg, '...');" + LineEnding;
+  Result += "  t := GetTickCount() + 120000;" + LineEnding + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    code := GetHTTPPageEx(http, url, dest);" + LineEnding;
+  Result += "    if code = 200 then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      ok := True;" + LineEnding;
+  Result += "      WriteLn('[AsyncDownloader]: ' + pkg + ' downloaded.');" + LineEnding;
+  Result += "    end" + LineEnding;
+  Result += "    else if (code = 403) or (code = 429) then" + LineEnding;
+  Result += "      WriteLn('[AsyncDownloader]: Rate limited (HTTP ', code, '). Wait about an hour, then retry.')" + LineEnding;
+  Result += "    else" + LineEnding;
+  Result += "      WriteLn('[AsyncDownloader]: Failed to download (HTTP ', code, '): ' + url);" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    WriteLn('[AsyncDownloader]: Error: ', GetExceptionMessage());" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+function TWaspAsync.GetUnzipperContent(): String;
+begin
+  Result += "var" + LineEnding;
+  Result += "  path, name: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'unzipper-' + LowerCase(name) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  path := GetProcessParameter('path');" + LineEnding;
+  Result += "  name := GetProcessParameter('name');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'downloader-' + LowerCase(name) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncUnzipper]: Unzipping ', name, ', this might take a while.');" + LineEnding + LineEnding;
+  Result += "  try" + LineEnding;
+  Result += "    UnZipFile(path + name + '.zip', path + name);" + LineEnding;
+  Result += "    DeleteFile(path + name + '.zip');" + LineEnding;
+  Result += "  except" + LineEnding;
+  Result += "    WriteLn('[AsyncUnzipper]: Error: ', GetExceptionMessage());" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+function TWaspAsync.GetMoverContent(): String;
+begin
+  Result += "const" + LineEnding;
+  Result += "  SEP = DirectorySeparator;" + LineEnding + LineEnding;
+  Result += "procedure TerminateScript(reason: String); overload;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Terminating: ' + reason);" + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "function TStringArray.Find(const value: String): Integer; constref;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for Result := 0 to High(Self) do" + LineEnding;
+  Result += "    if value = Self[Result] then" + LineEnding;
+  Result += "      Exit;" + LineEnding;
+  Result += "  Result := -1;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TStringArray.Contains(const value: String): Boolean; constref;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Result := Self.Find(value) > -1;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function TStringArray.Merge(glue:String=''): String; constref;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  i:Int32;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if Length(Self) = 0 then" + LineEnding;
+  Result += "    Exit();" + LineEnding + LineEnding;
+  Result += "  Result := Self[0];" + LineEnding;
+  Result += "  for i:=1 to High(Self) do" + LineEnding;
+  Result += "    Result += glue + Self[i];" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function BackupFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  contents: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath, False);" + LineEnding;
+  Result += "  if not ReadFileString(f, contents, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath + '.bak', contents, False);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function RestoreFile(filePath: String): Boolean;" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: Int32;" + LineEnding;
+  Result += "  contents: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  f := OpenFile(filePath + '.bak', False);" + LineEnding;
+  Result += "  if not ReadFileString(f, contents, FileSize(f)) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  CloseFile(f);" + LineEnding;
+  Result += "  Result := WriteFileContents(filePath, contents, False);" + LineEnding;
+  Result += "  DeleteFile(filePath + '.bak');" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function DirectoryIsEmpty(const directory: String): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  Result := (FindFiles(directory, False) = []) and (FindDirectories(directory, False) = []);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function DeleteFiles(const directory: String; skip: TStringArray = []): Boolean;" + LineEnding;
+  Result += "  function _SkipFile(dir: String): Boolean;" + LineEnding;
+  Result += "  var" + LineEnding;
+  Result += "    s: String;" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    for s in skip do" + LineEnding;
+  Result += "      if Pos(s, dir) > 0 then" + LineEnding;
+  Result += "        Exit(True);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  f: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for f in FindFiles(directory, True) do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    if _SkipFile(f) then" + LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
+  Result += "    if not DeleteFile(f) then" + LineEnding;
+  Result += "      Exit;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  Result := True;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function DeleteSubDirectories(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;" + LineEnding + LineEnding;
+  Result += "  function _SkipDirectory(dir: String): Boolean;" + LineEnding;
+  Result += "  var" + LineEnding;
+  Result += "    s: String;" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    for s in skip do" + LineEnding;
+  Result += "      if Pos(s, dir) > 0 then" + LineEnding;
+  Result += "        Exit(True);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  function _GetParent(dir: String): String;" + LineEnding;
+  Result += "  var" + LineEnding;
+  Result += "    strings: TStringArray;" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    strings := Explode(DirectorySeparator, dir);" + LineEnding;
+  Result += "    SetLength(strings, High(strings));" + LineEnding;
+  Result += "    Result := strings.Merge(DirectorySeparator);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  directories, parents: TStringArray;" + LineEnding;
+  Result += "  i: Int32;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  directories := FindDirectories(directory, True);" + LineEnding + LineEnding;
+  Result += "  while directories <> [] do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    for i := High(directories) downto 0 do" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      if _SkipDirectory(directories[i]) then" + LineEnding;
+  Result += "      begin" + LineEnding;
+  Result += "        parents += _GetParent(directories[i]);" + LineEnding;
+  Result += "        Delete(directories, i, 1);" + LineEnding;
+  Result += "        deleteRoot := False;" + LineEnding;
+  Result += "        Continue;" + LineEnding;
+  Result += "      end;" + LineEnding + LineEnding;
+  Result += "      if not parents.Contains(directories[i]) and not DeleteDirectory(directories[i], False) then" + LineEnding;
+  Result += "        Exit;" + LineEnding;
+  Result += "      Delete(directories, i, 1);" + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  Result := not deleteRoot or DeleteDirectory(directory, False);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function RMDir(const directory: String; deleteRoot: Boolean; skip: TStringArray = []): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not DeleteFiles(directory, skip) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  Result := DeleteSubDirectories(directory, deleteRoot, skip);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "function IsFileLocked(path: String): Boolean;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  if not FileExists(path) then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  if not BackupFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to backup file: ' + path);" + LineEnding + LineEnding;
+  Result += "  Result := not DeleteFile(path);" + LineEnding + LineEnding;
+  Result += "  if Result then" + LineEnding;
+  Result += "    DeleteFile(path + '.bak')" + LineEnding;
+  Result += "  else if not RestoreFile(path) then" + LineEnding;
+  Result += "    TerminateScript('Failed to restore file: ' + path);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "function FindLockedPlugins(): TStringArray;" + LineEnding;
+  Result += "const" + LineEnding;
+  Result += "  PATHS = [" + LineEnding;
+  Result += "    IncludePath + 'SRL'   + SEP + 'plugins' + SEP + 'libremoteinput' + SEP," + LineEnding;
+  Result += "    IncludePath + 'SRL-T' + SEP + 'plugins' + SEP + 'libremoteinput' + SEP" + LineEnding;
+  Result += "  ];" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  path, plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for path in PATHS do" + LineEnding;
+  Result += "    for plugin in FindFiles(path, False) do" + LineEnding;
+  Result += "      if IsFileLocked(plugin) then" + LineEnding;
+  Result += "        Result += plugin;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure KillWindowByClass(name: String);" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  window: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  for window in GetWindows().GetByClass(name) do" + LineEnding;
+  Result += "    window.Kill();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure KillSimbas();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  windows, simbas: TOSWindowArray;" + LineEnding;
+  Result += "  win: TOSWindow;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  windows := GetWindows();" + LineEnding;
+  Result += "  simbas := windows.GetByTitleAndClass('Output,File Browser,Editor,Function List', 'Window');" + LineEnding + LineEnding;
+  Result += "  if MessageDlg('Close Simba', 'Simba needs to be restarted.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript('You need to close all Simba windows to update SRL.');" + LineEnding + LineEnding;
+  Result += "  for win in simbas do" + LineEnding;
+  Result += "    win.Kill();" + LineEnding + LineEnding;
+  Result += "  TerminateScript();" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "procedure UnlockPlugins();" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  locked: TStringArray;" + LineEnding;
+  Result += "  plugin: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  locked := FindLockedPlugins();" + LineEnding;
+  Result += "  if locked = [] then" + LineEnding;
+  Result += "    Exit;" + LineEnding + LineEnding;
+  Result += "  if MessageDlg('Close RuneScape', 'RS Clients need to be closed to update this package.'," + LineEnding;
+  Result += "     TMsgDlgType.mtConfirmation, [mbOK, mbAbort]) = 3 then" + LineEnding;
+  Result += "    TerminateScript('You need to close your RS Clients to update SRL.');" + LineEnding + LineEnding;
+  Result += "  KillWindowByClass('SunAwtCanvas');" + LineEnding + LineEnding;
+  Result += "  for plugin in locked do" + LineEnding;
+  Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      KillWindowByClass('Jagex Launcher');" + LineEnding;
+  Result += "      Break;" + LineEnding;
+  Result += "    end;" + LineEnding + LineEnding;
+  Result += "  for plugin in locked do" + LineEnding;
+  Result += "    if IsFileLocked(plugin) then" + LineEnding;
+  Result += "    begin" + LineEnding;
+  Result += "      KillSimbas();" + LineEnding;
+  Result += "      Break;" + LineEnding;
+  Result += "    end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding + LineEnding;
+  Result += "function GetInstallDir(pkg: String): String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  case LowerCase(pkg) of" + LineEnding;
+  Result += "    'srl-t', 'srlt', 'srl': Result := 'SRL-T';" + LineEnding;
+  Result += "    'wasplib', 'wl': Result := 'WaspLib';" + LineEnding;
+  Result += "    else Result := pkg;" + LineEnding;
+  Result += "  end;" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "procedure MoveFiles(origin, pkg: String);" + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  paths, files: TStringArray;" + LineEnding;
+  Result += "  path, f, fPath, destination: String;" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  paths := GetDirectories(origin + pkg + SEP);" + LineEnding;
+  Result += "  if Length(paths) <> 1 then" + LineEnding;
+  Result += "    TerminateScript('The ' + pkg + ' download is empty or has unexpected things inside.');" + LineEnding + LineEnding;
+  Result += "  destination := IncludePath + GetInstallDir(pkg) + SEP;" + LineEnding;
+  Result += "  if DirectoryExists(destination) and not RMDir(destination, True, ['.git', 'overrides.simba']) then" + LineEnding;
+  Result += "    TerminateScript('Failed to delete old ' + GetInstallDir(pkg) + ' library');" + LineEnding;
+  Result += "  if not ForceDirectories(destination) then" + LineEnding;
+  Result += "    TerminateScript('Failed to create path: ' + destination);" + LineEnding + LineEnding;
+  Result += "  path := origin + pkg + SEP + paths[0] + SEP;" + LineEnding;
+  Result += "  files := FindFiles(path, True);" + LineEnding + LineEnding;
+  Result += "  for f in files do" + LineEnding;
+  Result += "  begin" + LineEnding;
+  Result += "    fPath := Replace(f, path, '', [rfReplaceAll]);" + LineEnding;
+  Result += "    if Pos('.git', fPath) > 0 then" + LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
+  Result += "    if Pos('overrides.simba', fPath) > 0 then" + LineEnding;
+  Result += "      Continue;" + LineEnding + LineEnding;
+  Result += "    if not ForceDirectories(destination + ExtractFilePath(fPath)) then" + LineEnding;
+  Result += "      TerminateScript('Failed to create path: ' + destination + ExtractFilePath(fPath));" + LineEnding + LineEnding;
+  Result += "    if not CopyFile(f, destination + fPath, False) then" + LineEnding;
+  Result += "      TerminateScript('Failed to copy file: ' + fPath);" + LineEnding + LineEnding;
+  Result += "    DeleteFile(f);" + LineEnding;
+  Result += "    if (FindFiles(ExtractFilePath(f), True) = []) and (FindDirectories(ExtractFilePath(f), True) = []) then" + LineEnding;
+  Result += "      DeleteDirectory(ExtractFilePath(f), False);" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  RMDir(origin + pkg, True);" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "var" + LineEnding;
+  Result += "  pkg: String;" + LineEnding + LineEnding;
+  Result += "procedure Free();" + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  CloseFile(CreateFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done'));" + LineEnding;
+  Result += "end;" + LineEnding + LineEnding;
+  Result += "begin" + LineEnding;
+  Result += "  pkg := GetProcessParameter('pkg');" + LineEnding + LineEnding;
+  Result += "  if FileExists({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done') then" + LineEnding;
+  Result += "    DeleteFile({$MACRO CURRENT_DIRECTORY} + 'mover-' + LowerCase(pkg) + '.done');" + LineEnding + LineEnding;
+  Result += "  AddOnTerminate(@Free);" + LineEnding + LineEnding;
+  Result += "  case LowerCase(pkg) of" + LineEnding;
+  Result += "    'srl-t', 'srlt', 'srl': UnlockPlugins();" + LineEnding;
+  Result += "  end;" + LineEnding + LineEnding;
+  Result += "  WriteLn('[AsyncMover]: Moving ', pkg, ' files, this will take a while.');" + LineEnding;
+  Result += "  MoveFiles(GetProcessParameter('origin'), pkg);" + LineEnding;
+  Result += "end;" + LineEnding;
+end;
+
+procedure TWaspAsync.Setup();
+begin
+  Self.Path := LAUNCHER_DATA + 'async' + DirectorySeparator;
+
+  if not ForceDirectories(LAUNCHER_DATA) then
+    TerminateScript('WaspAsync failed to create directory: ' + LAUNCHER_DATA);
+
+  if DirectoryExists(Self.Path) and not RMDir(Self.Path, True) then
+    TerminateScript('WaspAsync failed to delete old files. Please manually delete:' + Self.Path);
+
+  if DirectoryExists(LAUNCHER_DATA + 'downloads') and not RMDir(LAUNCHER_DATA + 'downloads') then
+    TerminateScript('WaspAsync failed to delete old files. Please manually delete: ' + LAUNCHER_DATA + 'downloads' + DirectorySeparator);
+
+  if not ForceDirectories(Self.Path) then
+    TerminateScript('WaspAsync can''t create async directory.');
+
+  Self.Write('downloader.simba', Self.GetDownloaderContent());
+  Self.Write('unzipper.simba', Self.GetUnzipperContent());
+  Self.Write('mover.simba', Self.GetMoverContent());
+end;
+
+var
+  WaspAsync: TWaspAsync;
+
+{$IFNDEF WS_CONFIG_INCLUDED}
+
+{$DEFINE WS_CONFIG_INCLUDED}
+
+function TJSONObject.getBoolean(key: String; acceptNull: Boolean): Boolean; constref; overload;
+begin
+  if not acceptNull then
+    Exit(Self.getBoolean(key));
+
+  Result := (Self <> nil) and Self.has(key) and not Self.isNull(key) and Self.getBoolean(key);
+end;
+
+function TJSONObject.put(key: string; Value: Boolean): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
+
+function TJSONObject.put(key: string; Value: Double): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
+
+function TJSONObject.put(key: string; Value: Integer): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
+
+function TJSONObject.put(key: string; Value: String): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
+
+function TJSONObject.put(key: string; Value: Pointer): TJSONObject; constref; override;
+begin
+  Self.Remove(key);
+  Result := inherited(key, value);
+end;
+
+function TJSONObject.toString(): String; constref; override;
+begin
+  Result := inherited;
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+function TJSONObject.toString(indentFactor: Integer): String; constref; override;
+begin
+  Result := inherited(indentFactor);
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+function TJSONArray.toString(): String; constref; override;
+begin
+  Result := inherited;
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+function TJSONArray.toString(indentFactor: Integer): String; constref; override;
+begin
+  Result := inherited(indentFactor);
+  Result := Result.ReplaceAll(
+              [
+                ['\u003A', ':'], ['\u0020', ' '],
+                ['},{', '},' + LineEnding + '  {'],
+                ['[{', '[' + LineEnding + '  {'],
+                ['}]', '}' + LineEnding + ']']
+              ]);
+end;
+
+type
+
+  TConfigJSON = record
+    Path: String;
+    JSON: TJSONObject;
+    IsSetup, OnTerminate: Boolean;
+  end;
+
+function TConfigJSON.GetConfig(): TJSONObject;
+var
+  str: String;
+begin
+  if FileExists(Self.Path) then
+  begin
+    str := ReadFileContents(Self.Path);
+    if str <> '' then
+    begin
+      try
+        Result.Init(str);
+      except
+        Result := nil;
+        Result.Init();
+      end;
+      Exit;
+    end;
+  end;
+
+  Result.Init();
+end;
+
+procedure TConfigJSON.Free();
+begin
+  if not Self.IsSetup then Exit;
+
+  Self.JSON.Free();
+  Self.JSON := nil;
+
+  Self.IsSetup := False;
+end;
+
+procedure TConfigJSON.Setup(jsonFile: String = ScriptName);
+begin
+  if jsonFile.Contains(DirectorySeparator) then
+  begin
+    Self.Path := ExtractFilePath(jsonFile);
+    jsonFile := ExtractFileName(jsonFile);
+  end
+  else
+    Self.Path := AppPath + 'Configs' + DirectorySeparator;
+
+  if not ForceDirectories(Self.Path) then
+    TerminateScript('Can''t create configs directory.');
+
+  if not jsonFile.EndsWith('.json') then
+    jsonFile += '.json';
+  Self.Path += jsonFile;
+
+  Self.JSON := Self.GetConfig();
+  Self.IsSetup := True;
+
+  if not Self.OnTerminate then
+  begin
+    AddOnTerminate(@Self.Free);
+    Self.OnTerminate := True;
+  end;
+end;
+
+procedure TConfigJSON.SaveConfig();
+begin
+  if Self.JSON = nil then
+    TerminateScript('You need to use TConfigJSON.Setup() before trying to save it into a config file.');
+
+  if not WriteFileContents(Self.Path, json.ToString(1), False) then
+    TerminateScript('Failed to save config.');
+end;
+
+procedure TConfigJSON.Put(key, value: String; save: Boolean = True);
+begin
+  if Self.JSON = nil then
+    Exit;
+  Self.JSON.Put(key, value);
+  if save then
+    Self.SaveConfig();
+end;
+
+function TConfigJSON.GetString(key: String): String;
+begin
+  if Self.JSON = nil then
+    Exit;
+  if Self.JSON.has(key) and not Self.JSON.isNull(key) then
+    Result := Self.JSON.getString(key);
+end;
+
+procedure TConfigJSON.Remove(key: String);
+begin
+  if Self.JSON = nil then
+    TerminateScript('You need to use TConfigJSON.Setup() before trying to delete a key on it.');
+  Self.JSON.remove(key);
+  Self.SaveConfig();
+end;
+
+{$IFNDEF WS_HTTP_INCLUDED}
+
+{$DEFINE WS_HTTP_INCLUDED}
+
+var
+  LauncherConfig: TConfigJSON;
+
+type
+  THTTPClient = record
+    Name: String;
+    Client: Int32;
+    Server: String;
+  end;
+
+function THTTPClient.GetHTTPCode(): Int32;
+begin
+  Result := GetHTTPResponseCode(Self.Client);
+end;
+
+procedure THTTPClient.Free();
+begin
+  FreeHTTPClient(Self.Client);
+end;
+
+function THTTPClient.GET(route: String; verbose: Boolean = True): String;
+var
+  time: UInt64;
+begin
+  time := GetTickCount();
+  Result := GetHTTPPage(Self.Client, Self.Server + route);
+  time := GetTickCount() - time;
+  Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
+  if verbose then
+    {$IFNDEF DEVELOPER_MODE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
+end;
+
+function THTTPClient.POST(route: String; verbose: Boolean = True): String;
+var
+  time: UInt64;
+begin
+  time := GetTickCount();
+  ClearPostData(Self.Client);
+  Result := PostHTTPPageEx(Self.Client, Self.Server + route);
+  time := GetTickCount() - time;
+  Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
+  if verbose then
+    {$IFNDEF DEVELOPER_MODE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
+end;
+
+function THTTPClient.POST(route: String; payload: String; verbose: Boolean = True): String; overload;
+var
+  time: UInt64;
+begin
+  time := GetTickCount();
+  Result := PostHTTPPage(Self.Client, Self.Server + route, payload);
+  time := GetTickCount() - time;
+  Result := StringReplace(Result, '\u0020', ' ', [rfReplaceAll]);
+  if verbose then
+    {$IFNDEF DEVELOPER_MODE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - ' + Result + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ELSE}
+    DebugLn(Self.Name, 'HTTPCode: ' + ToStr(Self.GetHTTPCode()) + ' - Response took: ' + ToStr(time) + 'ms.');
+    {$ENDIF}
+end;
+
+function THTTPClient.POST(route: String; payload: TJSONObject; verbose: Boolean = True): String; overload;
+begin
+  Result := Self.POST(route, payload.toString(), verbose);
+end;
+
+type
+  TGitHubClient = record(THTTPClient)
+    DownloadPath: String;
+    Packages: record
+      Current: record
+        SRLT: String;
+        WaspLib: String;
+      end;
+      Latest: record
+        SRLT: String;
+        WaspLib: String;
+      end;
+      Release: record
+        SRLT: String;
+        WaspLib: String;
+      end;
+    end;
+  end;
+
+procedure TGitHubClient.RefreshClient(isSetup: Boolean = True);
+begin
+  if isSetup then Self.Free();
+  Self.Client := InitializeHTTPClient(True);
+
+  SetHTTPContentType(Self.Client, 'application/json');
+  SetHTTPHeader(Self.Client, 'Accept', 'application/vnd.github+json');
+  SetHTTPHeader(Self.Client, 'User-Agent', 'B.A.S.H-Launcher');
+end;
+
+function TGitHubClient.GetLatestPackage(owner, repo: String): TJSONObject;
+const
+  ROUTE: String = 'repos/';
+var
+  response: String;
+begin
+  Result := nil;
+  try
+    response := Self.GET(ROUTE + owner + '/' + repo + '/releases/latest', {$IFDEF DEVELOPER_MODE}True{$ELSE}False{$ENDIF});
+
+    if Self.GetHTTPCode() = 200 then
+      Result.Init(response);
+  except
+    Result := nil;
+  end;
+end;
+
+function TGitHubClient.GetCurrentPackageVersion(pkg: String): String;
+var
+  path: String;
+begin
+  path := INCLUDEPATH + pkg + DIRECTORYSEPARATOR + 'CHANGELOG.md';
+
+  Result := ReadFileContents(path);
+  Result := Result.After('# [').Before('](https');
+end;
+
+procedure TGitHubClient.LoadPackageVersions();
+var
+  json: TJSONObject;
+begin
+  json := Self.GetLatestPackage(GITHUB_SRLT_OWNER, GITHUB_SRLT_REPO);
+  if json <> nil then
+  begin
+    Self.Packages.Latest.SRLT := json.getString('name').After('v');
+    Self.Packages.Release.SRLT := json.getString('zipball_url');
+    json.Free();
+  end
+  else
+    Self.Packages.Latest.SRLT := 'failed';
+
+  json := Self.GetLatestPackage(GITHUB_WASPLIB_OWNER, GITHUB_WASPLIB_REPO);
+  if json <> nil then
+  begin
+    Self.Packages.Latest.WaspLib := json.getString('name').After('v');
+    Self.Packages.Release.WaspLib := json.getString('zipball_url');
+    json.Free();
+  end
+  else
+    Self.Packages.Latest.WaspLib := 'failed';
+end;
+
+procedure TGitHubClient.Setup();
+begin
+  Self.Name := 'GitHub Client';
+  Self.Server := 'https://api.github.com/';
+  Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
+
+  if not ForceDirectories(Self.DownloadPath) then
+    TerminateScript('GitHubClient can''t create downloads directory.');
+
+  Self.RefreshClient(False);
+  AddOnTerminate(@Self.Free);
+
+  Self.Packages.Current.SRLT := Self.GetCurrentPackageVersion(SRLT_INSTALL_DIR);
+  Self.Packages.Current.WaspLib := Self.GetCurrentPackageVersion(WASPLIB_INSTALL_DIR);
+  Self.LoadPackageVersions();
+end;
+
+procedure TGitHubClient.Download(pkg: String);
+var
+  url: String;
+  params: TStringArray;
+begin
+  case LowerCase(pkg) of
+    'srlt', 'srl-t': url := Self.Packages.Release.SRLT;
+    'wl', 'wasplib': url := Self.Packages.Release.WaspLib;
+    else
+      TerminateScript('Unrecognized package to download: ' + pkg);
+  end;
+
+  params := ['url=' + url,'destination="'+ Self.DownloadPath + pkg + '.zip"', 'pkg=' + pkg];
+  WaspAsync.Run('downloader', params);
+end;
+
+function TGitHubClient.HasDownloadURL(pkg: String): Boolean;
+begin
+  case LowerCase(pkg) of
+    'srlt', 'srl-t': Result := Self.Packages.Release.SRLT <> '';
+    'wl', 'wasplib': Result := Self.Packages.Release.WaspLib <> '';
+    else Result := False;
+  end;
+end;
+
+var
+  GitHubClient: TGitHubClient;
+
+type
+  EScriptStatus = (OFFICIAL, COMMUNITY);
+  EScriptType = (FREE, PREMIUM, PREMIUM_NO_SUB, TESTING, TESTING_NO_SUB, FULL, FULL_NO_SUB);
+  EScriptSource = (BASH, LOCAL);
+
+  TScriptData = record
+    ID: String;
+    Name: String;
+    Description: String;
+    Content: String;
+    URL: String;
+    LocalPath: String;
+    Status: EScriptStatus;
+    Typ: EScriptType;
+    Source: EScriptSource;
+    Revision: Int32;
+    Activities: TStringArray;
+  end;
+
+  TScriptDataArray = array of TScriptData;
+
+function TScriptDataArray.Find(const id: String): Int32; constref;
+begin
+  for Result := 0 to High(Self) do
+    if Self[Result].ID = id then
+      Exit;
+  Result := -1;
+end;
+
+function ScriptDataSort(constref left, right: TScriptData): Int32;
+begin
+  if LowerCase(left.Name) > LowerCase(right.Name) then
+    Exit(1);
+  if LowerCase(left.Name) < LowerCase(right.Name) then
+    Exit(-1);
+end;
+
+function TScriptDataArray.Sorted(): TScriptDataArray;
+begin
+  Result := System.Sorted(Self, @ScriptDataSort);
+end;
+
+function NormalizeActivityId(const value: String): String;
+var
+  known: TStringArray;
+  id: String;
+begin
+  id := LowerCase(Trim(value));
+  // Combat skills
+  if (id = 'attack') or (id = 'defence') or (id = 'defense') or (id = 'hitpoint') or
+     (id = 'hitpoints') or (id = 'hp') or (id = 'strength') then
+    id := 'combat'
+  else if id = 'minigames' then
+    id := 'minigame'
+  else if id = 'runecrafting' then
+    id := 'runecraft'
+  else if (id = 'boss') or (id = 'bosses') then
+    id := 'bossing';
+
+  known := String(BASH_ACTIVITY_IDS).Split(',');
+  if known.Contains(id) then
+    Result := id
+  else
+    Result := '';
+end;
+
+function ParseActivitiesText(const raw: String): TStringArray;
+var
+  parts: TStringArray;
+  i: Int32;
+  id: String;
+begin
+  Result := [];
+  if Trim(raw) = '' then
+    Exit;
+  parts := raw.Replace(';', ',').Replace('|', ',').Replace('/', ',').Split(',');
+  for i := 0 to High(parts) do
+  begin
+    id := NormalizeActivityId(parts[i]);
+    if (id <> '') and (not Result.Contains(id)) then
+      Result += id;
+  end;
+end;
+
+function ParseActivitiesJSON(item: TJSONObject): TStringArray;
+var
+  arr: TJSONArray;
+  raw: String;
+begin
+  Result := [];
+  if item = nil then
+    Exit;
+
+  arr := item.optJSONArray('activities');
+  if arr = nil then
+    arr := item.optJSONArray('tags');
+  if arr <> nil then
+  begin
+    raw := arr.toString();
+    raw := raw.Replace('[', '').Replace(']', '').Replace('"', '').Replace('''', '');
+    Result := ParseActivitiesText(raw);
+  end;
+
+  if Length(Result) = 0 then
+  begin
+    raw := item.optString('activities', '');
+    if raw = '' then
+      raw := item.optString('tags', '');
+    Result := ParseActivitiesText(raw);
+  end;
+end;
+
+function InferScriptActivities(const name, path: String; existing: TStringArray): TStringArray;
+var
+  hay, folder: String;
+  parts: TStringArray;
+begin
+  Result := existing;
+  if Length(Result) > 0 then
+    Exit;
+
+  hay := LowerCase(name + ' ' + path);
+  folder := '';
+  parts := path.Replace('\', '/').Split('/');
+  if Length(parts) > 1 then
+    folder := LowerCase(parts[0]);
+
+  // Gathering
+  if (folder = 'farming') or hay.Contains('farm') then
+    Result += 'farming';
+  if (folder = 'fishing') or hay.Contains('fish') then
+    Result += 'fishing';
+  if (folder = 'hunter') or hay.Contains('hunter') or hay.Contains('chinchompa') or hay.Contains('trapping') then
+    Result += 'hunter';
+  if (folder = 'mining') or hay.Contains('mining') or hay.Contains('miner') or hay.Contains('barronite') or hay.Contains('calcified') then
+    Result += 'mining';
+  if (folder = 'woodcutting') or hay.Contains('woodcut') or hay.Contains('chopper') or hay.Contains('ironwood') or hay.Contains('roots') then
+    Result += 'woodcutting';
+
+  // Production
+  if (folder = 'cooking') or hay.Contains('cook') then
+    Result += 'cooking';
+  if (folder = 'crafting') or hay.Contains('craft') then
+    Result += 'crafting';
+  if (folder = 'fletching') or hay.Contains('fletch') then
+    Result += 'fletching';
+  if (folder = 'herblore') or hay.Contains('herb') then
+    Result += 'herblore';
+  if (folder = 'runecraft') or hay.Contains('runecraft') or hay.Contains('essence') then
+    Result += 'runecraft';
+  if (folder = 'smithing') or hay.Contains('smith') or hay.Contains('smelt') or hay.Contains('cannonball') then
+    Result += 'smithing';
+
+  // Utility skills
+  if (folder = 'agility') or hay.Contains('agility') or hay.Contains('roofhop') then
+    Result += 'agility';
+  if (folder = 'construction') or hay.Contains('construction') or hay.Contains('totem') then
+    Result += 'construction';
+  if (folder = 'firemaking') or hay.Contains('firemak') or hay.Contains('wintertodt') then
+    Result += 'firemaking';
+  if (folder = 'sailing') or hay.Contains('sail') or hay.Contains('shipwreck') or hay.Contains('salvag') then
+    Result += 'sailing';
+  if (folder = 'slayer') or hay.Contains('slayer') then
+    Result += 'slayer';
+  if (folder = 'thieving') or hay.Contains('thiev') or hay.Contains('blackjack') then
+    Result += 'thieving';
+
+  // Combat skills
+  if (folder = 'magic') or hay.Contains('magic') or hay.Contains('lunar') or hay.Contains('superheat') then
+    Result += 'magic';
+  if (folder = 'prayer') or hay.Contains('prayer') or hay.Contains('bones') then
+    Result += 'prayer';
+  if (folder = 'ranged') or hay.Contains('ranged') or hay.Contains('range ') then
+    Result += 'ranged';
+  if (folder = 'combat') or hay.Contains('combat') or hay.Contains('attack') or hay.Contains('strength') or
+     hay.Contains('defence') or hay.Contains('hitpoint') then
+    Result += 'combat';
+
+  // Bossing / minigames
+  if (folder = 'bossing') or (folder = 'boss') or hay.Contains('boss') or hay.Contains('vardorvis') or
+     hay.Contains('tormented') or hay.Contains('demon') then
+    Result += 'bossing';
+  if (folder = 'minigame') or (folder = 'minigames') or hay.Contains('minigame') or hay.Contains('squirkin') or
+     hay.Contains('trouble brewing') or hay.Contains('gemstone crab') or hay.Contains('crab slayer') then
+    Result += 'minigame';
+
+  // Generic
+  if (Length(Result) = 0) and (hay.Contains('crab') or hay.Contains('kill') or hay.Contains('fight')) then
+    Result += 'combat';
+end;
+
+function ScriptMatchesActivity(const script: TScriptData; const activity: String): Boolean;
+var
+  id: String;
+begin
+  id := NormalizeActivityId(activity);
+  if (id = '') or (id = 'all') then
+    Exit(True);
+  Result := script.Activities.Contains(id);
+end;
+
+function GetCategoryActivityIds(const category: String): TStringArray;
+var
+  c: String;
+begin
+  c := LowerCase(Trim(category));
+  if c = 'combat' then
+    Result := ['combat', 'magic', 'prayer', 'ranged']
+  else if c = 'gathering' then
+    Result := ['farming', 'fishing', 'hunter', 'mining', 'woodcutting']
+  else if c = 'production' then
+    Result := ['cooking', 'crafting', 'fletching', 'herblore', 'runecraft', 'smithing']
+  else if c = 'utility' then
+    Result := ['agility', 'construction', 'firemaking', 'sailing', 'slayer', 'thieving']
+  else if c = 'other' then
+    Result := ['minigame', 'bossing']
+  else
+    Result := [];
+end;
+
+function ActivityLabelForId(const activityId: String): String;
+var
+  ids, labels: TStringArray;
+  i: Int32;
+begin
+  ids := String(BASH_ACTIVITY_IDS).Split(',');
+  labels := String(BASH_ACTIVITY_LABELS).Split(',');
+  for i := 0 to High(ids) do
+    if ids[i] = activityId then
+    begin
+      if i <= High(labels) then
+        Exit(labels[i]);
+      Exit(activityId);
+    end;
+  Result := activityId;
+end;
+
+function ScriptMatchesFilter(const script: TScriptData; const filter, category: String): Boolean;
+var
+  f, c: String;
+  acts: TStringArray;
+  i: Int32;
+begin
+  f := LowerCase(Trim(filter));
+  c := LowerCase(Trim(category));
+  if f = '' then
+    f := 'all';
+  if c = '' then
+    c := 'all';
+
+  if f <> 'all' then
+    Exit(ScriptMatchesActivity(script, f));
+
+  if c = 'all' then
+    Exit(True);
+
+  acts := GetCategoryActivityIds(c);
+  for i := 0 to High(acts) do
+    if script.Activities.Contains(acts[i]) then
+      Exit(True);
+  Result := False;
+end;
+
+type
+  TBashLicenseClient = record
+    Server: String;
+    Key: String;
+    Scripts: TScriptDataArray;
+    CatalogScripts: TScriptDataArray;
+    Loaded: Boolean;
+    CatalogLoaded: Boolean;
+    Valid: Boolean;
+    LastError: String;
+    ExpiresAt: String;
+  end;
+
+function TBashLicenseClient.GetKey(): String;
+begin
+  Result := Self.Key;
+  if Result = '' then
+    Result := LauncherConfig.GetString('license_key');
+end;
+
+procedure TBashLicenseClient.SetKey(const value: String; save: Boolean = True);
+begin
+  Self.Key := System.Trim(value);
+  Self.Loaded := False;
+  Self.Valid := False;
+  Self.Scripts := [];
+  Self.LastError := '';
+  Self.ExpiresAt := '';
+  if save then
+  begin
+    if Self.Key = '' then
+      LauncherConfig.Remove('license_key')
+    else
+      LauncherConfig.Put('license_key', Self.Key);
+  end;
+end;
+
+procedure TBashLicenseClient.ClearKey();
+begin
+  Self.SetKey('', True);
+end;
+
+function TBashLicenseClient.HasKey(): Boolean;
+begin
+  Result := Self.GetKey() <> '';
+end;
+
+function TBashLicenseClient.GetInstallId(): String;
+var
+  i: Int32;
+  hex: String;
+const
+  HEXCHARS = '0123456789abcdef';
+begin
+  Result := LauncherConfig.GetString('install_id');
+  if Result <> '' then
+    Exit;
+
+  hex := '';
+  for i := 1 to 32 do
+    hex += HEXCHARS[1 + System.Random(0, 15)];
+  Result :=
+    Copy(hex, 1, 8) + '-' +
+    Copy(hex, 9, 4) + '-' +
+    Copy(hex, 13, 4) + '-' +
+    Copy(hex, 17, 4) + '-' +
+    Copy(hex, 21, 12);
+  LauncherConfig.Put('install_id', Result);
+end;
+
+function TBashLicenseClient.ParseCatalogScripts(scriptsArr: TJSONArray; locked: Boolean): TScriptDataArray;
+var
+  i: Int32;
+  item: TJSONObject;
+  script: TScriptData;
+  tier: String;
+begin
+  Result := [];
+  if scriptsArr = nil then
+    Exit;
+
+  for i := 0 to scriptsArr.High() do
+  begin
+    item := scriptsArr.optJSONObject(i);
+    if item = nil then
+      Continue;
+
+    script.ID := item.optString('id', '');
+    script.Name := item.optString('name', '');
+    script.Description := item.optString('description', '');
+    script.URL := item.optString('path', item.optString('url', ''));
+    script.Revision := item.optInt('revision', 0);
+    script.Status := EScriptStatus.OFFICIAL;
+    script.Source := EScriptSource.BASH;
+    script.Content := '';
+    script.LocalPath := '';
+    script.Activities := InferScriptActivities(script.Name, script.URL, ParseActivitiesJSON(item));
+
+    tier := LowerCase(item.optString('type', 'premium'));
+    if tier = 'free' then
+      script.Typ := EScriptType.FREE
+    else if tier = 'testing' then
+    begin
+      if locked then
+        script.Typ := EScriptType.TESTING_NO_SUB
+      else
+        script.Typ := EScriptType.TESTING;
+    end
+    else if tier = 'full' then
+    begin
+      if locked then
+        script.Typ := EScriptType.FULL_NO_SUB
+      else
+        script.Typ := EScriptType.FULL;
+    end
+    else
+    begin
+      if locked then
+        script.Typ := EScriptType.PREMIUM_NO_SUB
+      else
+        script.Typ := EScriptType.PREMIUM;
+    end;
+
+    if script.ID = '' then
+      Continue;
+    if script.URL = '' then
+      script.URL := script.Name + '.simba';
+    if script.Name = '' then
+      script.Name := ExtractFileName(script.URL).Before('.simba');
+    if script.Revision = 0 then
+      script.Revision := 1;
+
+    Result += script;
+  end;
+
+  Result := Result.Sorted();
+end;
+
+function TBashLicenseClient.ParseEntitlementScripts(scriptsArr: TJSONArray): TScriptDataArray;
+begin
+  Result := Self.ParseCatalogScripts(scriptsArr, False);
+end;
+
+function TBashLicenseClient.FetchPublicCatalog(force: Boolean = False): TScriptDataArray;
+var
+  http, code: Int32;
+  url, response: String;
+  json: TJSONObject;
+  scriptsArr: TJSONArray;
+begin
+  if Self.CatalogLoaded and (not force) then
+    Exit(Self.CatalogScripts);
+
+  Result := [];
+  Self.CatalogScripts := [];
+  Self.CatalogLoaded := True;
+
+  url := Self.Server + '/v1/catalog';
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, 'Accept', 'application/json');
+    try
+      SetSocketTimeout(http, 20000);
+    except
+    end;
+
+    response := GetHTTPPage(http, url);
+    code := GetHTTPResponseCode(http);
+  finally
+    FreeHTTPClient(http);
+  end;
+
+  if code <> 200 then
+  begin
+    WriteLn('[B.A.S.H] Premium catalog /v1/catalog failed (HTTP ', code, ').');
+    Exit;
+  end;
+
+  try
+    json.Init(response);
+  except
+    Exit;
+  end;
+
+  try
+    scriptsArr := json.optJSONArray('scripts');
+    Result := Self.ParseCatalogScripts(scriptsArr, True);
+    Self.CatalogScripts := Result;
+  finally
+    json.Free();
+  end;
+end;
+
+function TBashLicenseClient.FetchEntitlements(force: Boolean = False): TScriptDataArray;
+var
+  http, code: Int32;
+  key, url, response: String;
+  json: TJSONObject;
+  scriptsArr: TJSONArray;
+begin
+  if Self.Loaded and (not force) then
+    Exit(Self.Scripts);
+
+  Result := [];
+  Self.Scripts := [];
+  Self.Valid := False;
+  Self.LastError := '';
+  Self.ExpiresAt := '';
+  Self.Loaded := True;
+
+  key := Self.GetKey();
+  if key = '' then
+  begin
+    Self.LastError := 'no_license_key';
+    Exit;
+  end;
+
+  url := Self.Server + '/v1/me';
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, BASH_LICENSE_HEADER, key);
+    SetHTTPHeader(http, BASH_INSTALL_HEADER, Self.GetInstallId());
+    SetHTTPHeader(http, 'Accept', 'application/json');
+    try
+      SetSocketTimeout(http, 20000);
+    except
+    end;
+
+    response := GetHTTPPage(http, url);
+    code := GetHTTPResponseCode(http);
+  finally
+    FreeHTTPClient(http);
+  end;
+
+  if (code = 401) or (code = 403) then
+  begin
+    if response.Contains('license_expired') then
+      Self.LastError := 'license_expired'
+    else
+      Self.LastError := 'license_revoked_or_invalid';
+    WriteLn('[B.A.S.H] License key rejected (HTTP ', code, ', ', Self.LastError, '). Premium updates unavailable; local copies kept.');
+    Exit;
+  end;
+
+  if code <> 200 then
+  begin
+    Self.LastError := 'http_' + ToStr(code);
+    WriteLn('[B.A.S.H] Premium API /v1/me failed (HTTP ', code, ').');
+    Exit;
+  end;
+
+  try
+    json.Init(response);
+  except
+    Self.LastError := 'bad_json';
+    Exit;
+  end;
+
+  try
+    if not json.getBoolean('valid', True) then
+    begin
+      Self.LastError := json.optString('error', 'invalid');
+      Exit;
+    end;
+
+    Self.ExpiresAt := json.optString('expires_at', '');
+    scriptsArr := json.optJSONArray('scripts');
+    Result := Self.ParseEntitlementScripts(scriptsArr);
+    Self.Scripts := Result;
+    Self.Valid := True;
+  finally
+    json.Free();
+  end;
+end;
+
+function FormatLicenseExpiryDate(const iso: String): String;
+begin
+  Result := iso;
+  if Length(iso) < 10 then
+    Exit;
+  Result := Copy(iso, 9, 2) + '-' + Copy(iso, 6, 2) + '-' + Copy(iso, 1, 4);
+end;
+
+function TBashLicenseClient.DownloadPremium(script: TScriptData): Boolean;
+var
+  http, code: Int32;
+  key, url, dest, scriptsPath, tempDest, errBody: String;
+begin
+  Result := False;
+  key := Self.GetKey();
+  if key = '' then
+  begin
+    MessageDlg('B.A.S.H', 'Enter a license key to install or update premium scripts.', TMsgDlgType.mtWarning, []);
+    Exit;
+  end;
+
+  scriptsPath := ScriptPath + 'bigaussie' + DirectorySeparator;
+  if not ForceDirectories(scriptsPath) then
+  begin
+    MessageDlg('B.A.S.H', 'Failed to create scripts folder: ' + scriptsPath, TMsgDlgType.mtError, []);
+    Exit;
+  end;
+
+  dest := scriptsPath + ExtractFileName(script.URL);
+  tempDest := dest + '.download';
+  url := Self.Server + '/v1/scripts/' + script.ID + '/download';
+
+  WriteLn('[B.A.S.H] Downloading premium script: ', script.Name);
+  WriteLn('[B.A.S.H] URL: ', url);
+  WriteLn('[B.A.S.H] Dest: ', dest);
+
+  if FileExists(tempDest) then
+    DeleteFile(tempDest);
+
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, BASH_LICENSE_HEADER, key);
+    SetHTTPHeader(http, BASH_INSTALL_HEADER, Self.GetInstallId());
+    try
+      SetSocketTimeout(http, 60000);
+    except
+    end;
+
+    code := GetHTTPPageEx(http, url, tempDest);
+    WriteLn('[B.A.S.H] Premium download HTTP code: ', code);
+
+    if (code = 401) or (code = 403) then
+    begin
+      errBody := '';
+      if FileExists(tempDest) then
+      begin
+        try
+          errBody := ReadFileContents(tempDest);
+        except
+        end;
+        DeleteFile(tempDest);
+      end;
+      Self.Loaded := False;
+      Self.Valid := False;
+      Self.Scripts := [];
+      if errBody.Contains('license_expired') then
+        Self.LastError := 'license_expired'
+      else
+        Self.LastError := 'access_revoked';
+
+      if Self.LastError = 'license_expired' then
+        MessageDlg(
+          'B.A.S.H',
+          'License expired for "' + script.Name + '".' + LineEnding +
+          'Your local copy (if any) was kept. Renew access to download updates.',
+          TMsgDlgType.mtWarning,
+          []
+        )
+      else
+        MessageDlg(
+          'B.A.S.H',
+          'Access revoked or invalid license key for "' + script.Name + '".' + LineEnding +
+          'Your local copy (if any) was kept. New updates are unavailable until access is restored.',
+          TMsgDlgType.mtWarning,
+          []
+        );
+      Exit;
+    end;
+
+    if code <> 200 then
+    begin
+      if FileExists(tempDest) then
+        DeleteFile(tempDest);
+      MessageDlg('B.A.S.H', 'Failed to download premium script "' + script.Name + '" (HTTP ' + ToStr(code) + ').', TMsgDlgType.mtError, []);
+      Exit;
+    end;
+
+    if not FileExists(tempDest) then
+    begin
+      MessageDlg('B.A.S.H', 'Download reported OK but file was not written: ' + tempDest, TMsgDlgType.mtError, []);
+      Exit;
+    end;
+
+    if FileExists(dest) and (not DeleteFile(dest)) then
+    begin
+      DeleteFile(tempDest);
+      MessageDlg('B.A.S.H', 'Could not replace existing script file: ' + dest, TMsgDlgType.mtError, []);
+      Exit;
+    end;
+
+    if not RenameFile(tempDest, dest) then
+    begin
+      try
+        WriteFileContents(dest, ReadFileContents(tempDest), False);
+        DeleteFile(tempDest);
+      except
+        if FileExists(tempDest) then
+          DeleteFile(tempDest);
+        MessageDlg('B.A.S.H', 'Download OK but failed to finalize: ' + dest, TMsgDlgType.mtError, []);
+        Exit;
+      end;
+    end;
+
+    WriteLn('[B.A.S.H] Premium script saved: ', dest);
+    Result := True;
+  except
+    if FileExists(tempDest) then
+      DeleteFile(tempDest);
+    WriteLn('[B.A.S.H] Premium download error: ', GetExceptionMessage());
+    MessageDlg('B.A.S.H', 'Download error for "' + script.Name + '": ' + GetExceptionMessage(), TMsgDlgType.mtError, []);
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+function TBashLicenseClient.DownloadFree(script: TScriptData): Boolean;
+var
+  http, code: Int32;
+  url, dest, scriptsPath, tempDest: String;
+begin
+  Result := False;
+  if script.ID = '' then
+    Exit;
+
+  scriptsPath := ScriptPath + 'bigaussie' + DirectorySeparator;
+  if not ForceDirectories(scriptsPath) then
+  begin
+    MessageDlg('B.A.S.H', 'Failed to create scripts folder: ' + scriptsPath, TMsgDlgType.mtError, []);
+    Exit;
+  end;
+
+  dest := scriptsPath + ExtractFileName(script.URL).Replace('%20', ' ');
+  if dest.EndsWith(DirectorySeparator) or (ExtractFileName(script.URL) = '') then
+    dest := scriptsPath + script.Name + '.simba';
+  tempDest := dest + '.download';
+  url := Self.Server + '/v1/scripts/' + script.ID + '/download';
+
+  WriteLn('[B.A.S.H] Downloading free script: ', script.Name);
+
+  if FileExists(tempDest) then
+    DeleteFile(tempDest);
+
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, BASH_INSTALL_HEADER, Self.GetInstallId());
+    try
+      SetSocketTimeout(http, 60000);
+    except
+    end;
+
+    code := GetHTTPPageEx(http, url, tempDest);
+    if code <> 200 then
+    begin
+      if FileExists(tempDest) then
+        DeleteFile(tempDest);
+      Exit;
+    end;
+
+    if not FileExists(tempDest) then
+      Exit;
+
+    if FileExists(dest) and (not DeleteFile(dest)) then
+    begin
+      DeleteFile(tempDest);
+      MessageDlg('B.A.S.H', 'Could not replace existing script file: ' + dest, TMsgDlgType.mtError, []);
+      Exit;
+    end;
+
+    if not RenameFile(tempDest, dest) then
+    begin
+      try
+        WriteFileContents(dest, ReadFileContents(tempDest), False);
+        DeleteFile(tempDest);
+      except
+        if FileExists(tempDest) then
+          DeleteFile(tempDest);
+        Exit;
+      end;
+    end;
+
+    WriteLn('[B.A.S.H] Free script saved: ', dest);
+    Result := True;
+  except
+    if FileExists(tempDest) then
+      DeleteFile(tempDest);
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+procedure TBashLicenseClient.Setup();
+begin
+  Self.Server := BASH_PREMIUM_API;
+  Self.Key := LauncherConfig.GetString('license_key');
+  Self.GetInstallId();
+  Self.Scripts := [];
+  Self.CatalogScripts := [];
+  Self.Loaded := False;
+  Self.CatalogLoaded := False;
+  Self.Valid := False;
+  Self.LastError := '';
+  Self.ExpiresAt := '';
+end;
+
+var
+  BashLicenseClient: TBashLicenseClient;
+
+type
+  TBashScriptClient = record(THTTPClient)
+    Repo: String;
+    Branch: String;
+    ScriptsPath: String;
+    DownloadPath: String;
+    Scripts: TScriptDataArray;
+    LocalScripts: TScriptDataArray;
+    Loaded: Boolean;
+    LocalLoaded: Boolean;
+    ActiveSource: EScriptSource;
+  end;
+
+procedure TBashScriptClient.RefreshClient(isSetup: Boolean = True);
+begin
+  if isSetup then Self.Free();
+  Self.Client := InitializeHTTPClient(True);
+
+  SetHTTPContentType(Self.Client, 'application/json');
+  SetHTTPHeader(Self.Client, 'Accept', 'application/vnd.github+json');
+  SetHTTPHeader(Self.Client, 'User-Agent', 'B.A.S.H-Launcher');
+end;
+
+function EncodeGitHubPath(const path: String): String;
+begin
+
+  Result := path.Replace('\', '/').Replace(' ', '%20');
+end;
+
+function TBashScriptClient.FetchRawHeader(path: String): String;
+var
+  http: Int32;
+  url: String;
+begin
+  url := 'https://raw.githubusercontent.com/' + Self.Repo + '/' + Self.Branch + '/' + EncodeGitHubPath(path);
+  http := InitializeHTTPClient(True);
+  try
+    Result := GetHTTPPage(http, url);
+    if GetHTTPResponseCode(http) <> 200 then
+      Result := '';
+    if Length(Result) > 8192 then
+      SetLength(Result, 8192);
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+function ExtractScriptDescription(const header: String): String;
+var
+  i, start, closeBrace: Int32;
+begin
+  i := 1;
+  while i <= Length(header) do
+  begin
+    if header[i] <> '{' then
+    begin
+      Inc(i);
+      Continue;
+    end;
+
+    if (i < Length(header)) and (header[i + 1] = '$') then
+    begin
+      closeBrace := i + 1;
+      while (closeBrace <= Length(header)) and (header[closeBrace] <> '}') do
+        Inc(closeBrace);
+      i := closeBrace + 1;
+      Continue;
+    end;
+
+    start := i + 1;
+    closeBrace := start;
+    while (closeBrace <= Length(header)) and (header[closeBrace] <> '}') do
+      Inc(closeBrace);
+
+    if closeBrace > Length(header) then
+      Exit;
+
+    Result := Copy(header, start, closeBrace - start).Trim();
+    Exit;
+  end;
+end;
+
+function ScriptDisplayNameFromPath(const path: String): String;
+var
+  fileName: String;
+begin
+  fileName := ExtractFileName(path).Replace('%20', ' ');
+  if LowerCase(fileName).EndsWith('.simba') then
+    Result := Copy(fileName, 1, Length(fileName) - Length('.simba'))
+  else
+    Result := fileName;
+end;
+
+function TBashScriptClient.ParseScriptHeader(const header, path: String): TScriptData;
+var
+  idStr, revStr, description, actsStr: String;
+begin
+  Result.URL := path;
+  Result.LocalPath := '';
+  Result.Name := ScriptDisplayNameFromPath(path);
+  Result.Typ := EScriptType.FREE;
+  Result.Status := EScriptStatus.OFFICIAL;
+  Result.Source := EScriptSource.BASH;
+  Result.Activities := [];
+
+  if header.Contains('SCRIPT_ID') then
+  begin
+    idStr := header.After('SCRIPT_ID := ''').Before('''}');
+    if idStr = '' then
+      idStr := header.After('SCRIPT_ID := "').Before('"}');
+    Result.ID := idStr;
+  end;
+
+  if Result.ID = '' then
+    Result.ID := path;
+
+  revStr := header.After('SCRIPT_REVISION := ''').Before('''}');
+  if revStr = '' then
+    revStr := header.After('SCRIPT_REVISION := "').Before('"}');
+  Result.Revision := StrToIntDef(revStr, 0);
+
+  if header.Contains('SCRIPT_ACTIVITIES') then
+  begin
+    actsStr := header.After('SCRIPT_ACTIVITIES := ''').Before('''}');
+    if actsStr = '' then
+      actsStr := header.After('SCRIPT_ACTIVITIES := "').Before('"}');
+    Result.Activities := ParseActivitiesText(actsStr);
+  end;
+
+  description := ExtractScriptDescription(header);
+  if description <> '' then
+    Result.Description := description;
+
+  Result.Activities := InferScriptActivities(Result.Name, path, Result.Activities);
+end;
+
+function TBashScriptClient.ScriptsFromCatalogArray(scriptsArr: TJSONArray): TScriptDataArray;
+var
+  i: Int32;
+  item: TJSONObject;
+  script: TScriptData;
+begin
+  Result := [];
+  if scriptsArr = nil then
+    Exit;
+
+  for i := 0 to scriptsArr.High() do
+  begin
+    item := scriptsArr.optJSONObject(i);
+    if item = nil then
+      Continue;
+
+    script.ID := item.optString('id', '');
+    script.Description := item.optString('description', '');
+    script.URL := item.optString('path', item.optString('url', ''));
+    script.Revision := item.optInt('revision', 0);
+    script.Status := EScriptStatus.OFFICIAL;
+    script.Source := EScriptSource.BASH;
+    script.Content := '';
+    script.LocalPath := '';
+
+    if script.URL <> '' then
+      script.Name := ScriptDisplayNameFromPath(script.URL)
+    else
+      script.Name := item.optString('name', '');
+    script.Activities := InferScriptActivities(script.Name, script.URL, ParseActivitiesJSON(item));
+
+    case LowerCase(item.optString('type', 'free')) of
+      'premium': script.Typ := EScriptType.PREMIUM;
+      'premium_no_sub': script.Typ := EScriptType.PREMIUM_NO_SUB;
+      'testing': script.Typ := EScriptType.TESTING;
+      'testing_no_sub': script.Typ := EScriptType.TESTING_NO_SUB;
+      'full': script.Typ := EScriptType.FULL;
+      'full_no_sub': script.Typ := EScriptType.FULL_NO_SUB;
+      else script.Typ := EScriptType.FREE;
+    end;
+
+    if script.URL = '' then
+      Continue;
+    if script.Name = '' then
+      script.Name := ScriptDisplayNameFromPath(script.URL);
+    if script.ID = '' then
+      script.ID := script.URL;
+
+    if script.Typ <> EScriptType.FREE then
+      Continue;
+
+    Result += script;
+  end;
+
+  Result := Result.Sorted();
+end;
+
+function TBashScriptClient.FetchRawCatalog(): TScriptDataArray;
+var
+  http: Int32;
+  url, response: String;
+  json: TJSONObject;
+  scriptsArr: TJSONArray;
+begin
+  Result := [];
+  url := 'https://raw.githubusercontent.com/' + Self.Repo + '/' + Self.Branch + '/catalog.json';
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    response := GetHTTPPage(http, url);
+    if GetHTTPResponseCode(http) <> 200 then
+      Exit;
+  finally
+    FreeHTTPClient(http);
+  end;
+
+  try
+    json.Init(response);
+  except
+    Exit;
+  end;
+
+  try
+    scriptsArr := json.optJSONArray('scripts');
+    if scriptsArr = nil then
+      Exit;
+    Result := Self.ScriptsFromCatalogArray(scriptsArr);
+  finally
+    json.Free();
+  end;
+end;
+
+function TBashScriptClient.FetchScriptsFromApiTree(): TScriptDataArray;
+var
+  response, treeSha, path, header, msg: String;
+  json, treeObj: TJSONObject;
+  tree: TJSONArray;
+  i, attempt: Int32;
+  script: TScriptData;
+begin
+  Result := [];
+  treeSha := Self.Branch;
+
+  for attempt := 1 to 2 do
+  begin
+    response := Self.GET('repos/' + Self.Repo + '/git/trees/' + treeSha + '?recursive=1', False);
+    if Self.GetHTTPCode() <> 200 then
+    begin
+      if response.Contains('rate limit') or (Self.GetHTTPCode() = 403) then
+        Exit;
+      Exit;
+    end;
+
+    json.Init(response);
+    try
+      tree := json.optJSONArray('tree');
+      if tree <> nil then
+      begin
+        for i := 0 to tree.High() do
+        begin
+          with tree.getJSONObject(i) do
+          begin
+            if getString('type') <> 'blob' then Continue;
+            path := getString('path');
+            if not path.EndsWith('.simba') then Continue;
+            if path.Contains('BigAussieLauncher') then Continue;
+          end;
+
+          header := Self.FetchRawHeader(path);
+          if header <> '' then
+            script := Self.ParseScriptHeader(header, path)
+          else
+          begin
+
+            script.URL := path;
+            script.LocalPath := '';
+            script.Name := ScriptDisplayNameFromPath(path);
+            script.ID := path;
+            script.Typ := EScriptType.FREE;
+            script.Status := EScriptStatus.OFFICIAL;
+            script.Source := EScriptSource.BASH;
+            script.Revision := 1;
+            script.Description := '';
+            script.Content := '';
+            script.Activities := InferScriptActivities(script.Name, path, []);
+          end;
+          Result += script;
+        end;
+
+        Result := Result.Sorted();
+        Exit;
+      end;
+
+      treeObj := json.optJSONObject('tree');
+      if (treeObj = nil) or (treeObj.optString('sha', '') = '') then
+        Exit;
+
+      treeSha := treeObj.getString('sha');
+    finally
+      json.Free();
+    end;
+  end;
+end;
+
+function TBashScriptClient.MergePremiumScripts(freeScripts: TScriptDataArray): TScriptDataArray;
+var
+  catalog, entitled: TScriptDataArray;
+  i, idx, e: Int32;
+  script: TScriptData;
+  owned, isTesting, isFull: Boolean;
+begin
+  Result := freeScripts;
+
+  catalog := BashLicenseClient.FetchPublicCatalog();
+  entitled := BashLicenseClient.FetchEntitlements();
+
+  for i := 0 to High(catalog) do
+  begin
+    script := catalog[i];
+
+    if script.Typ = EScriptType.FREE then
+    begin
+      idx := Result.Find(script.ID);
+      if idx > -1 then
+        Result[idx] := script
+      else
+        Result += script;
+      Continue;
+    end;
+
+    isTesting := (script.Typ = EScriptType.TESTING) or (script.Typ = EScriptType.TESTING_NO_SUB);
+    isFull := (script.Typ = EScriptType.FULL) or (script.Typ = EScriptType.FULL_NO_SUB);
+    owned := False;
+    for e := 0 to High(entitled) do
+      if entitled[e].ID = script.ID then
+      begin
+        owned := True;
+        if (script.Description = '') and (entitled[e].Description <> '') then
+          script.Description := entitled[e].Description;
+        if entitled[e].Revision > 0 then
+          script.Revision := entitled[e].Revision;
+        if (Length(script.Activities) = 0) and (Length(entitled[e].Activities) > 0) then
+          script.Activities := entitled[e].Activities;
+        Break;
+      end;
+
+    if owned then
+    begin
+      if isTesting then
+        script.Typ := EScriptType.TESTING
+      else if isFull then
+        script.Typ := EScriptType.FULL
+      else
+        script.Typ := EScriptType.PREMIUM;
+    end
+    else
+    begin
+      if isTesting then
+      begin
+        script.Typ := EScriptType.TESTING_NO_SUB;
+        if script.Description <> '' then
+          script.Description := script.Description + LineEnding + LineEnding +
+            'Testing script - enter a license key to Install / Update.'
+        else
+          script.Description :=
+            'Testing script - enter a license key to Install / Update.';
+      end
+      else if isFull then
+      begin
+        script.Typ := EScriptType.FULL_NO_SUB;
+        if script.Description <> '' then
+          script.Description := script.Description + LineEnding + LineEnding +
+            'Full - not accepting new sales currently.'
+        else
+          script.Description :=
+            'Full - not accepting new sales currently.';
+      end
+      else
+      begin
+        script.Typ := EScriptType.PREMIUM_NO_SUB;
+        if script.Description <> '' then
+          script.Description := script.Description + LineEnding + LineEnding +
+            'Premium script - enter a license key to Install / Update.'
+        else
+          script.Description :=
+            'Premium script - enter a license key to Install / Update.';
+      end;
+    end;
+
+    idx := Result.Find(script.ID);
+    if idx > -1 then
+      Result[idx] := script
+    else
+      Result += script;
+  end;
+
+  for e := 0 to High(entitled) do
+  begin
+    idx := Result.Find(entitled[e].ID);
+    if idx > -1 then
+    begin
+      Result[idx].Typ := entitled[e].Typ;
+      Continue;
+    end;
+    script := entitled[e];
+    Result += script;
+  end;
+
+  Result := Result.Sorted();
+end;
+
+procedure TBashScriptClient.InvalidateCatalog();
+begin
+  Self.Loaded := False;
+  Self.Scripts := [];
+  BashLicenseClient.Loaded := False;
+  BashLicenseClient.CatalogLoaded := False;
+end;
+
+function TBashScriptClient.FetchFreeScriptsFromApi(): TScriptDataArray;
+var
+  catalog: TScriptDataArray;
+  i: Int32;
+begin
+  Result := [];
+  catalog := BashLicenseClient.FetchPublicCatalog(True);
+  for i := 0 to High(catalog) do
+    if catalog[i].Typ = EScriptType.FREE then
+      Result += catalog[i];
+  Result := Result.Sorted();
+end;
+
+function TBashScriptClient.GetScripts(): TScriptDataArray;
+begin
+  if Self.ActiveSource = EScriptSource.LOCAL then
+    Exit(Self.GetLocalScripts());
+
+  if Self.Loaded then
+    Exit(Self.Scripts);
+
+  Result := Self.FetchFreeScriptsFromApi();
+  if Result <> [] then
+  begin
+    Result := Self.MergePremiumScripts(Result);
+    Self.Scripts := Result;
+    Self.Loaded := True;
+    Exit;
+  end;
+
+  Result := Self.FetchRawCatalog();
+  if Result <> [] then
+  begin
+    Result := Self.MergePremiumScripts(Result);
+    Self.Scripts := Result;
+    Self.Loaded := True;
+    Exit;
+  end;
+
+  Result := Self.FetchScriptsFromApiTree();
+  if Result <> [] then
+  begin
+    Result := Self.MergePremiumScripts(Result);
+    Self.Scripts := Result;
+    Self.Loaded := True;
+    Exit;
+  end;
+
+  Result := Self.MergePremiumScripts([]);
+  if Result <> [] then
+  begin
+    Self.Scripts := Result;
+    Self.Loaded := True;
+    Exit;
+  end;
+
+  TerminateScript('BashScriptClient could not load scripts (no catalog.json and API unavailable). Add catalog.json to the scripts repo or retry later.');
+end;
+
+function TBashScriptClient.ScanLocalScripts(const directory: String): TScriptDataArray;
+var
+  files: TStringArray;
+  i: Int32;
+  path, header, rel: String;
+  script: TScriptData;
+begin
+  Result := [];
+  if (directory = '') or (not DirectoryExists(directory)) then
+    Exit;
+
+  files := FindFiles(directory, True);
+  for i := 0 to High(files) do
+  begin
+    path := files[i];
+    if not path.EndsWith('.simba') then
+      Continue;
+    if path.Contains('BigAussieLauncher') or path.Contains('B.A.S.HLauncher') then
+      Continue;
+
+    if not FileExists(path) then
+    begin
+      if FileExists(directory + path) then
+        path := directory + path
+      else
+        Continue;
+    end;
+
+    try
+      header := ReadFileContents(path);
+    except
+      Continue;
+    end;
+    if Length(header) > 8192 then
+      SetLength(header, 8192);
+
+    rel := path;
+    if rel.StartsWith(directory) then
+      rel := Copy(rel, Length(directory) + 1, Length(rel) - Length(directory));
+
+    script := Self.ParseScriptHeader(header, rel);
+    script.Source := EScriptSource.LOCAL;
+    script.Status := EScriptStatus.COMMUNITY;
+    script.LocalPath := path;
+    script.URL := path;
+    script.Description := '';
+    if script.Revision = 0 then
+      script.Revision := 1;
+
+    Result += script;
+  end;
+
+  Result := Result.Sorted();
+end;
+
+function TBashScriptClient.GetLocalScripts(): TScriptDataArray;
+begin
+  if Self.LocalLoaded then
+    Exit(Self.LocalScripts);
+
+  Result := Self.ScanLocalScripts(WASPSCRIPTS_DIR);
+  Self.LocalScripts := Result;
+  Self.LocalLoaded := True;
+end;
+
+procedure TBashScriptClient.SetActiveSource(source: EScriptSource);
+begin
+  Self.ActiveSource := source;
+end;
+
+function TBashScriptClient.IsLocalSource(): Boolean;
+begin
+  Result := Self.ActiveSource = EScriptSource.LOCAL;
+end;
+
+procedure TBashScriptClient.DownloadScript(script: TScriptData);
+var
+  http, code: Int32;
+  url, dest: String;
+begin
+  if (script.Typ = EScriptType.PREMIUM) or (script.Typ = EScriptType.TESTING) or (script.Typ = EScriptType.FULL) then
+  begin
+    BashLicenseClient.DownloadPremium(script);
+    Exit;
+  end;
+
+  if (script.Typ = EScriptType.PREMIUM_NO_SUB) or (script.Typ = EScriptType.TESTING_NO_SUB) or (script.Typ = EScriptType.FULL_NO_SUB) then
+  begin
+    MessageDlg(
+      'B.A.S.H',
+      '"' + script.Name + '" requires an active license key.' + LineEnding +
+      'Enter your key in the License field, then try Install again.',
+      TMsgDlgType.mtWarning,
+      []
+    );
+    Exit;
+  end;
+
+  if script.Typ = EScriptType.FREE then
+  begin
+    if BashLicenseClient.DownloadFree(script) then
+      Exit;
+  end;
+
+  if not ForceDirectories(Self.ScriptsPath) then
+  begin
+    WriteLn('[B.A.S.H] Failed to create scripts folder: ', Self.ScriptsPath);
+    MessageDlg('B.A.S.H', 'Failed to create scripts folder: ' + Self.ScriptsPath, TMsgDlgType.mtError, []);
+    Exit;
+  end;
+
+  dest := Self.ScriptsPath + ExtractFileName(script.URL).Replace('%20', ' ');
+  url := 'https://raw.githubusercontent.com/' + Self.Repo + '/' + Self.Branch + '/' + EncodeGitHubPath(script.URL);
+
+  WriteLn('[B.A.S.H] Downloading script: ', script.Name);
+  WriteLn('[B.A.S.H] URL: ', url);
+  WriteLn('[B.A.S.H] Dest: ', dest);
+
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    try
+      SetSocketTimeout(http, 30000);
+    except
+    end;
+
+
+    code := GetHTTPPageEx(http, url, dest);
+    WriteLn('[B.A.S.H] Download HTTP code: ', code);
+
+    if (code = 403) or (code = 429) then
+    begin
+      if FileExists(dest) then DeleteFile(dest);
+      MessageDlg('B.A.S.H', 'GitHub rate limited while downloading "' + script.Name + '". Wait about an hour, then retry.', TMsgDlgType.mtWarning, []);
+      Exit;
+    end;
+
+    if code <> 200 then
+    begin
+      if FileExists(dest) then DeleteFile(dest);
+      MessageDlg('B.A.S.H', 'Failed to download "' + script.Name + '" (HTTP ' + ToStr(code) + ').' + LineEnding + url, TMsgDlgType.mtError, []);
+      Exit;
+    end;
+
+    if not FileExists(dest) then
+    begin
+      MessageDlg('B.A.S.H', 'Download reported OK but file was not written: ' + dest, TMsgDlgType.mtError, []);
+      Exit;
+    end;
+
+    WriteLn('[B.A.S.H] Script saved: ', dest);
+  except
+    if FileExists(dest) then DeleteFile(dest);
+    WriteLn('[B.A.S.H] Download error: ', GetExceptionMessage());
+    MessageDlg('B.A.S.H', 'Download error for "' + script.Name + '": ' + GetExceptionMessage(), TMsgDlgType.mtError, []);
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+procedure TBashScriptClient.Setup();
+begin
+  Self.Name := 'Bash Script Client';
+  Self.Server := 'https://api.github.com/';
+  Self.Repo := BASH_SCRIPTS_REPO;
+  Self.Branch := BASH_SCRIPTS_BRANCH;
+  Self.ScriptsPath := ScriptPath + 'bigaussie' + DirectorySeparator;
+  Self.DownloadPath := LAUNCHER_DATA + 'downloads' + DirectorySeparator;
+  Self.ActiveSource := EScriptSource.BASH;
+  Self.LocalLoaded := False;
+
+  if not ForceDirectories(Self.ScriptsPath) then
+    TerminateScript('BashScriptClient can''t create scripts directory.');
+  if not ForceDirectories(Self.DownloadPath) then
+    TerminateScript('BashScriptClient can''t create downloads directory.');
+
+  Self.RefreshClient(False);
+  AddOnTerminate(@Self.Free);
+end;
+
+var
+  BashScriptClient: TBashScriptClient;
+
+{$IFNDEF WS_FORMUTILS_INCLUDED}
+{$DEFINE WS_FORMUTILS_INCLUDED}
+
+function TControl.GetDPI(): Int32; static;
+var
+  tmp: TFont;
+begin
+  tmp.Init();
+  Result := tmp.GetPixelsPerInch();
+  tmp.Free();
+end;
+
+function TControl.AdjustToDPI(n: Int32): Int32; static;
+begin
+  Result := Round(n * TControl.GetDPI() / 96);
+end;
+
+function TControl.ReverseAdjustToDPI(n: Int32): Int32; static;
+begin
+  Result := Round(n / TControl.GetDPI() / 96);
+end;
+
+procedure TPanel.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TImage.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TLabel.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TEdit.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TButton.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+  Self.SetHeight(TControl.AdjustToDPI(20));
+end;
+
+procedure TRadioButton.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TListBox.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TMemo.Create(owner: TControl);
+begin
+  Self.Init(owner);
+  Self.SetParent(owner);
+end;
+
+procedure TControl.SetFontColor(color: TColor);
+begin
+  Self.GetFont().setColor(color);
+end;
+
+procedure TControl.SetFontSize(size: Int32);
+begin
+  Self.GetFont().setSize(TControl.ReverseAdjustToDPI(size));
+end;
+
+procedure TControl.SetFontQuality(quality: TFontQuality);
+begin
+  Self.GetFont().setQuality(quality);
+end;
+
+procedure TControl.SetFontStyle(qualities: TFontStyles);
+begin
+  Self.GetFont().setStyle(qualities);
+end;
+
+procedure TRadioButton.SetChecked(value: Boolean);
+begin
+  if value then
+    Self.setState(cbChecked)
+  else
+    Self.setState(cbUnchecked);
+end;
+
+function TRadioButton.IsChecked(): Boolean;
+begin
+  Result := Self.getState() = cbChecked;
+end;
+
+function TControl.GetTrueWidth(): Int32;
+var
+  bmp: TBitmap;
+  canvas: TCanvas;
+  font: TFont;
+begin
+  if Self = nil then
+    Exit;
+
+  bmp.Init();
+  try
+    canvas := bmp.getCanvas();
+    font := Self.getFont();
+
+    if font <> nil then
+    begin
+      canvas.setFont(font);
+      Result := canvas.TextWidth(Self.getCaption());
+    end;
+  finally
+    bmp.Free();
+  end;
+end;
+
+function TControl.GetTrueHeight(): Int32;
+var
+  bmp: TBitmap;
+  canvas: TCanvas;
+  font: TFont;
+begin
+  if Self = nil then
+    Exit;
+
+  bmp.Init();
+  try
+    canvas := bmp.getCanvas();
+    font := Self.getFont();
+    if font <> nil then
+    begin
+      canvas.setFont(font);
+      Result := canvas.TextHeight(Self.getCaption());
+    end;
+  finally
+    bmp.Free();
+  end;
+end;
+
+function TComponent.GetChild(name: TComponentName): TComponent;
+var
+  i: Int32;
+  child: TComponent;
+begin
+  if Self = nil then
+    Exit;
+
+  if Self.GetName() = name then
+    Exit(Self);
+
+  for i := 0 to Self.getComponentCount() - 1 do
+  begin
+    child := Self.GetComponent(i);
+    Result := child.GetChild(name);
+    if Result <> nil then
+      Exit;
+  end;
+end;
+
+type
+  TDarkListBox = record
+    OutterPanel: TPanel;
+    InnerPanel: TPanel;
+    ListBox: TListBox;
+  end;
+
+procedure TDarkListBox.Create(owner: TControl);
+begin
+  Self.OutterPanel.Create(owner);
+  Self.OutterPanel.setBevelWidth(0);
+  Self.OutterPanel.setColor($3A342C);
+
+  Self.InnerPanel.Create(Self.OutterPanel);
+  Self.InnerPanel.SetTop(2);
+  Self.InnerPanel.SetLeft(2);
+  Self.InnerPanel.setWidth(Self.OutterPanel.getWidth() - 4);
+  Self.InnerPanel.setHeight(Self.OutterPanel.getHeight() - 4);
+  Self.InnerPanel.setBevelWidth(0);
+  Self.InnerPanel.setColor($24201C);
+
+  Self.ListBox.Create(Self.InnerPanel);
+  Self.ListBox.setLeft(-2);
+  Self.ListBox.SetTop(-2);
+  Self.ListBox.setWidth(Self.OutterPanel.getWidth());
+  Self.ListBox.setHeight(Self.OutterPanel.getHeight());
+
+end;
+
+function TDarkListBox.GetLeft(): Integer;
+begin
+  Result := Self.OutterPanel.GetLeft();
+end;
+
+function TDarkListBox.GetTop(): Integer;
+begin
+  Result := Self.OutterPanel.getTop();
+end;
+
+function TDarkListBox.GetWidth(): Integer;
+begin
+  Result := Self.OutterPanel.getWidth();
+end;
+
+function TDarkListBox.GetHeight(): Integer;
+begin
+  Result := Self.OutterPanel.getHeight();
+end;
+
+procedure TDarkListBox.SetLeft(value: Integer);
+begin
+  Self.OutterPanel.SetLeft(value);
+end;
+
+procedure TDarkListBox.SetTop(value: Integer);
+begin
+  Self.OutterPanel.SetTop(value);
+end;
+
+procedure TDarkListBox.SetWidth(value: Integer);
+begin
+  Self.OutterPanel.setWidth(value);
+  Self.InnerPanel.setWidth(value - 4);
+  Self.ListBox.setWidth(value);
+end;
+
+procedure TDarkListBox.SetHeight(value: Integer);
+begin
+  Self.OutterPanel.setHeight(value);
+  Self.InnerPanel.setHeight(value - 4);
+  Self.ListBox.setHeight(value);
+end;
+
+function TDarkListBox.GetAlign(): TAlign;
+begin
+  Result := Self.OutterPanel.getAlign();
+end;
+
+procedure TDarkListBox.SetAlign(value: TAlign);
+var
+  w, h: Int32;
+begin
+  Self.OutterPanel.setAlign(value);
+  with TPanel(Self.OutterPanel.getOwner()) do
+  begin
+    w := GetWidth();
+    h := getHeight();
+  end;
+
+  h -= TControl.AdjustToDPI(15);
+
+  Self.InnerPanel.setWidth(w - TControl.AdjustToDPI(4));
+  Self.InnerPanel.setHeight(h - TControl.AdjustToDPI(4));
+
+  Self.ListBox.setWidth(w);
+  Self.ListBox.setHeight(h);
+end;
+
+type
+  TLabeledControl  = record Panel: TPanel; Caption: TLabel; Control: TControl; end;
+  TLabeledEdit     = record(TLabeledControl) Edit: TEdit; end;
+  TLabeledDarkListBox  = record(TLabeledControl) ListBox: TDarkListBox; end;
+
+procedure TLabeledControl.Create(owner: TControl);
+begin
+  Self.Panel.Create(owner);
+  Self.Panel.setBevelWidth(0);
+
+  Self.Caption.Create(Self.Panel);
+  Self.Caption.setAlign(alTop);
+end;
+
+procedure TLabeledEdit.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.Edit.Create(Self.Panel);
+  Self.Edit.setAlign(alClient);
+  Self.Edit.setHeight(TControl.AdjustToDPI(30));
+  Self.Control := Self.Edit;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.Edit.getHeight());
+end;
+
+procedure TLabeledDarkListBox.Create(owner: TControl); override;
+begin
+  inherited;
+
+  Self.ListBox.Create(Self.Panel);
+  Self.ListBox.setAlign(alClient);
+  Self.Control := Self.ListBox.ListBox;
+
+  Self.Panel.setHeight(Self.Caption.getHeight() + Self.ListBox.getHeight());
+end;
+
+procedure TLabeledControl.SetCaption(value: String);
+begin
+  Self.Caption.setCaption(value);
+end;
+
+procedure TLabeledControl.SetControlColor(color: TColor);
+begin
+  Self.Control.setColor(color);
+end;
+
+procedure TLabeledControl.SetControlFontColor(color: TColor);
+begin
+  Self.Control.SetFontColor(color);
+end;
+
+procedure TLabeledControl.SetName(value: String);
+var
+  caption: String;
+begin
+  caption := Self.Panel.getCaption();
+  Self.Panel.setName(value + '_panel');
+  Self.Panel.setCaption(caption);
+
+  caption := Self.Caption.getCaption();
+  Self.Caption.setName(value + '_label');
+  Self.Caption.setCaption(caption);
+end;
+
+procedure TLabeledEdit.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := LowerCase(StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]));
+
+  inherited(value);
+  caption := Self.Edit.getCaption();
+  Self.Edit.setName(value + '_edit');
+  Self.Edit.setCaption(caption);
+end;
+
+procedure TLabeledDarkListBox.SetName(value: String); override;
+var
+  caption: String;
+begin
+  value := StringReplace(LowerCase(value), ' ', '_', [rfReplaceAll]);
+
+  inherited(value);
+  caption := Self.ListBox.ListBox.getCaption();
+  Self.ListBox.ListBox.setName(value + '_listbox');
+  Self.ListBox.ListBox.setCaption(caption);
+end;
+
+procedure TLabeledControl.SetLeft(value: Int32);
+begin
+  Self.Panel.setLeft(value);
+end;
+
+procedure TLabeledControl.SetTop(value: Int32);
+begin
+  Self.Panel.SetTop(value);
+end;
+
+procedure TLabeledControl.SetWidth(value: Int32);
+begin
+  Self.Panel.setWidth(value);
+end;
+
+procedure TLabeledDarkListBox.SetWidth(value: Int32); override;
+begin
+  Self.Panel.setWidth(value);
+  Self.ListBox.SetAlign(Self.ListBox.GetAlign());
+end;
+
+procedure TLabeledControl.SetHeight(value: Int32);
+begin
+  Self.Panel.setHeight(value);
+end;
+
+procedure TLabeledDarkListBox.SetHeight(value: Int32); override;
+begin
+  Self.Panel.setHeight(value);
+  Self.ListBox.SetAlign(Self.ListBox.GetAlign());
+end;
+
+function TLabeledControl.GetLeft(): Int32;
+begin
+  Result := Self.Panel.getLeft();
+end;
+
+function TLabeledControl.GetTop(): Int32;
+begin
+  Result := Self.Panel.getTop();
+end;
+
+function TLabeledControl.GetRight(): Int32;
+begin
+  Result := Self.Panel.getBoundsRect().Right;
+end;
+
+function TLabeledControl.GetBottom(): Int32;
+begin
+  Result := Self.Panel.getBoundsRect().Bottom;
+end;
+
+function TLabeledControl.GetWidth(): Int32;
+begin
+  Result := Self.Panel.getWidth();
+end;
+
+function TLabeledControl.GetHeight(): Int32;
+begin
+  Result := Self.Panel.getHeight();
+end;
+
+procedure TLabeledEdit.SetText(value: String);
+begin
+  Self.Edit.setText(value);
+end;
+
+procedure TLabeledEdit.SetPasswordChar(value: Char = '*');
+begin
+  Self.Edit.setPasswordChar(value);
+end;
+
+{$IFNDEF WS_UPDATER_INCLUDED}
+{$DEFINE WS_UPDATER_INCLUDED}
+
+type
+  TScriptFile = record
+    URL: String;
+    ID: String;
+    Revision: Int32;
+    Path: String;
+  end;
+
+  TScriptFileArray = array of TScriptFile;
+
+  TWaspUpdater = record
+    Name: String;
+    Launcher: TScriptFile;
+
+    Scripts: TScriptFileArray;
+    ScriptsPath: String;
+
+    MonitorSRLT: TMonitor;
+    MonitorWL: TMonitor;
+  end;
+
+var
+  WaspUpdater: TWaspUpdater;
+
+procedure TMonitor.NextState(); forward;
+
+procedure TMonitor.Fail(const reason: String);
+begin
+  Self.State := EMonitorState.NONE;
+  Self.CurrentFile := '';
+  Self.Timer.setEnabled(False);
+
+  if Self.Caption <> nil then
+  begin
+    Self.Caption.setCaption(reason);
+    Self.Caption.SetFontColor($E85D4C);
+    Self.Caption.Repaint();
+  end;
+
+  if Self.Button <> nil then
+    Self.Button.setEnabled(True);
+
+  WriteLn('[B.A.S.H updater] ', Self.Package, ': ', reason);
+end;
+
+procedure TMonitor._OnTimer(sender: TObject);
+var
+  doneFile, failFile: String;
+begin
+  doneFile := WaspAsync.Path + Self.CurrentFile;
+  failFile := StringReplace(doneFile, '.done', '.fail', []);
+
+  if FileExists(failFile) then
+  begin
+    DeleteFile(failFile);
+    TTimer(sender).SetEnabled(False);
+    if Self.State = EMonitorState.DOWNLOAD then
+      Self.Fail('Rate limited')
+    else
+      Self.Fail('Failed');
+    Exit;
+  end;
+
+  if FileExists(doneFile) and DeleteFile(doneFile) then
+  begin
+    TTimer(sender).SetEnabled(False);
+    Self.NextState();
+    Exit;
+  end;
+
+
+  if (Self.State = EMonitorState.DOWNLOAD) and (Self.StartedAt > 0) and (GetTickCount() - Self.StartedAt > 90000) then
+  begin
+    TTimer(sender).SetEnabled(False);
+    Self.Fail('Timed out');
+  end;
+end;
+
+procedure TMonitor.NextState();
+var
+  params: TStringArray;
+begin
+  Self.State := EMonitorState(Ord(Self.State) + 1);
+  if Self.State > High(EMonitorState) then
+    Self.State := EMonitorState.NONE;
+
+  case Self.State of
+    EMonitorState.DOWNLOAD:
+    begin
+      Self.CurrentFile := 'downloader-' + LowerCase(Self.Package) + '.done';
+      Self.StartedAt := GetTickCount();
+
+      if not GitHubClient.HasDownloadURL(Self.Package) then
+      begin
+        Self.Fail('Rate limited');
+        Exit;
+      end;
+
+      GitHubClient.Download(Self.Package);
+
+      Self.Caption.setCaption('Downloading');
+      Self.Caption.SetFontColor($D4A017);
+      Self.Caption.Repaint();
+      if Self.Button <> nil then
+        Self.Button.setEnabled(False);
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EMonitorState.UNZIP:
+    begin
+      Self.CurrentFile := 'unzipper-' + LowerCase(Self.Package) + '.done';
+      Self.StartedAt := GetTickCount();
+      params := ['path=' + GitHubClient.DownloadPath, 'name=' + Self.Package];
+      WaspAsync.Run('unzipper', params);
+
+      Self.Caption.setCaption('Unzipping');
+      Self.Caption.SetFontColor($D4A017);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EMonitorState.CLEAN:
+    begin
+      Self.CurrentFile := 'mover-' + LowerCase(Self.Package) + '.done';
+      Self.StartedAt := GetTickCount();
+      params := ['origin=' + GitHubClient.DownloadPath, 'pkg=' + Self.Package];
+      WaspAsync.Run('mover', params);
+
+      Self.Caption.setCaption('Cleaning');
+      Self.Caption.SetFontColor($D4A017);
+      Self.Caption.Repaint();
+
+      Self.Timer.SetEnabled(True);
+    end;
+
+    EMonitorState.NONE:
+    begin
+      Self.CurrentFile := '';
+      Self.StartedAt := 0;
+
+      case LowerCase(Self.Package) of
+        'srl-t', 'srlt':
+        begin
+          GitHubClient.Packages.Current.SRLT := GitHubClient.GetCurrentPackageVersion(SRLT_INSTALL_DIR);
+          if GitHubClient.Packages.Current.SRLT = '' then
+            Self.Caption.setCaption('Missing')
+          else
+            Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.SRLT);
+
+          if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+            Self.Caption.SetFontColor($E85D4C)
+          else
+            Self.Caption.SetFontColor($3DCF7A);
+          Self.Caption.Repaint();
+        end;
+        'wasplib', 'wl':
+        begin
+          GitHubClient.Packages.Current.WaspLib := GitHubClient.GetCurrentPackageVersion(WASPLIB_INSTALL_DIR);
+          if GitHubClient.Packages.Current.WaspLib = '' then
+            Self.Caption.setCaption('Missing')
+          else
+            Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.WaspLib);
+
+          if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+            Self.Caption.SetFontColor($E85D4C)
+          else
+            Self.Caption.SetFontColor($3DCF7A);
+          Self.Caption.Repaint();
+        end;
+      end;
+
+      Self.Caption.Repaint();
+      if Self.Button <> nil then
+        Self.Button.setEnabled(True);
+      Self.Timer.setEnabled(False);
+    end;
+  end;
+end;
+
+procedure TMonitor.RunMonitor(caption, button: TComponent);
+begin
+  if not Self.IsSetup then
+  begin
+    Self.Caption := caption;
+    Self.Button := button;
+    Self.Timer.setOnTimer(@Self._OnTimer);
+    Self.IsSetup := True;
+  end;
+
+  Self.State := EMonitorState.NONE;
+  Self.NextState();
+end;
+
+procedure TWaspUpdater.Update(pkg: String; caption, button: TComponent);
+begin
+  case pkg of
+    'srlt':    Self.MonitorSRLT.RunMonitor(caption, button);
+    'wasplib': Self.MonitorWL.RunMonitor(caption, button);
+  end;
+end;
+
+function TWaspUpdater.GetScriptFileEx(filepath: String): TScriptFile;
+var
+  fileContent, idStr, revStr: String;
+begin
+  Result.URL := ExtractFileName(filepath).Before('.simba');
+  Result.Path := filepath;
+  fileContent := ReadFileContents(filepath);
+
+  idStr := fileContent.After('SCRIPT_ID := ''').Before('''}');
+  if idStr = '' then
+    idStr := fileContent.After('SCRIPT_ID := "').Before('"}');
+
+  if idStr = '' then
+    idStr := ExtractFileName(filepath);
+  Result.ID := idStr;
+
+  revStr := fileContent.After('SCRIPT_REVISION := ''').Before('''}');
+  if revStr = '' then
+    revStr := fileContent.After('SCRIPT_REVISION := "').Before('"}');
+  Result.Revision := StrToIntDef(revStr, 0);
+
+
+  if (Result.Revision = 0) and FileExists(filepath) then
+    Result.Revision := 1;
+end;
+
+function TWaspUpdater.GetScriptFiles(): TScriptFileArray;
+var
+  files: TStringArray;
+  i: Int32;
+  script: TScriptFile;
+begin
+  if Self.Scripts <> [] then Exit(Self.Scripts);
+
+  files := GetFiles(Self.ScriptsPath, 'simba');
+  for i := 0 to High(files) do
+  begin
+    script := Self.GetScriptFileEx(Self.ScriptsPath + files[i]);
+    if script.Path <> '' then
+      Result += script;
+  end;
+
+  Self.Scripts := Result;
+end;
+
+function TWaspUpdater.GetScriptFile(id: String): TScriptFile;
+var
+  i: Int32;
+  scripts: TScriptFileArray;
+  fileName: String;
+begin
+  scripts := Self.GetScriptFiles();
+  for i := 0 to High(scripts) do
+    if id = scripts[i].ID then
+      Exit(scripts[i]);
+
+
+  fileName := ExtractFileName(id);
+  for i := 0 to High(scripts) do
+  begin
+    if (fileName <> '') and (ExtractFileName(scripts[i].Path) = fileName) then
+      Exit(scripts[i]);
+    if (fileName <> '') and (scripts[i].URL = fileName.Before('.simba')) then
+      Exit(scripts[i]);
+  end;
+end;
+
+procedure TWaspUpdater.UpdateScriptFileRevision(script: TScriptFile);
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Scripts) do
+    if Self.Scripts[i].ID = script.ID then
+    begin
+      Self.Scripts[i] := script;
+      Exit;
+    end;
+
+  Self.Scripts += script;
+end;
+
+procedure TWaspUpdater.UpdateScript(script: TScriptData);
+var
+  path: String;
+  installed: TScriptFile;
+begin
+  BashScriptClient.DownloadScript(script);
+  path := Self.ScriptsPath + ExtractFileName(script.URL);
+  if not FileExists(path) then
+    Exit;
+
+  installed := Self.GetScriptFileEx(path);
+
+  if (script.ID <> '') and (installed.ID <> script.ID) then
+    installed.ID := script.ID;
+  if installed.Revision = 0 then
+    installed.Revision := Max(script.Revision, 1);
+
+  Self.UpdateScriptFileRevision(installed);
+end;
+
+
+procedure TWaspUpdater.Free();
+begin
+  Self.MonitorSRLT.Timer.Free();
+  Self.MonitorWL.Timer.Free();
+end;
+
+procedure TWaspUpdater.Setup();
+begin
+  Self.Name := 'BashUpdater';
+  Self.Launcher.ID := {$macro SCRIPT_ID};
+  Self.Launcher.Revision := StrToIntDef({$macro SCRIPT_REVISION}, 1);
+
+  Self.Launcher.Path := ScriptPath + BASH_LAUNCHER_FILE;
+  Self.ScriptsPath := ScriptPath + 'bigaussie' + DirectorySeparator;
+
+  if not ForceDirectories(Self.ScriptsPath) then
+    TerminateScript('BashUpdater can''t create scripts directory.');;
+
+  Self.MonitorSRLT.Package := 'srl-t';
+  Self.MonitorSRLT.Timer.Init(nil);
+  Self.MonitorSRLT.Timer.setName('srlt_update_monitor');
+  Self.MonitorSRLT.Timer.setInterval(200);
+
+  Self.MonitorWL.Package := 'wasplib';
+  Self.MonitorWL.Timer.Init(nil);
+  Self.MonitorWL.Timer.setName('wl_update_monitor');
+  Self.MonitorWL.Timer.setInterval(200);
+
+  AddOnTerminate(@Self.Free);
+end;
+
+{$IFNDEF WS_FORM_INCLUDED}
+{$DEFINE WS_FORM_INCLUDED}
+
+type
+  TWaspForm = record
+    Form: TForm;
+    Size: TPoint;
+    ActivityFilter: String;
+    ActivityCategory: String;
+    VisibleScripts: TScriptDataArray;
+    Updating: record
+      Script: Boolean;
+    end;
+  end;
+
+function TWaspForm.GetSelectedScript(out script: TScriptData): Boolean;
+var
+  list: TListBox;
+  idx: Int32;
+begin
+  Result := False;
+  list := Self.Form.GetChild('scripts_listbox');
+  if (list = nil) or (list.getItemIndex() < 0) then
+    Exit;
+  idx := list.getItemIndex();
+  if (idx < 0) or (idx > High(Self.VisibleScripts)) then
+    Exit;
+  script := Self.VisibleScripts[idx];
+  Result := True;
+end;
+
+function ActivityIconPath(const activityId: String): String;
+var
+  candidates: TStringArray;
+  i: Int32;
+begin
+  candidates := [
+    ExtractFilePath(ScriptFile) + BASH_ACTIVITY_ICON_DIR + activityId + '.bmp',
+    BASH_ASSETS_DIR + 'activities' + DirectorySeparator + activityId + '.bmp',
+    IncludePath + 'WaspLib' + DirectorySeparator + 'utils' + DirectorySeparator +
+      'assets' + DirectorySeparator + 'activities' + DirectorySeparator + activityId + '.bmp'
+  ];
+  for i := 0 to High(candidates) do
+    if FileExists(candidates[i]) then
+      Exit(candidates[i]);
+  Result := candidates[1];
+end;
+
+function BashLogoPath(): String;
+var
+  candidates: TStringArray;
+  i: Int32;
+begin
+  candidates := [
+    ExtractFilePath(ScriptFile) + 'assets' + DirectorySeparator + BASH_LOGO_NAME,
+    BASH_ASSETS_DIR + BASH_LOGO_NAME,
+    IncludePath + 'WaspLib' + DirectorySeparator + 'utils' + DirectorySeparator +
+      'assets' + DirectorySeparator + BASH_LOGO_NAME
+  ];
+  for i := 0 to High(candidates) do
+    if FileExists(candidates[i]) then
+      Exit(candidates[i]);
+  Result := candidates[1];
+end;
+
+function DownloadBashAsset(const relativePath, destPath: String): Boolean;
+var
+  http, code: Int32;
+  url, destDir: String;
+begin
+  Result := False;
+  if FileExists(destPath) then
+    Exit(True);
+
+  destDir := ExtractFilePath(destPath);
+  if (destDir <> '') and (not DirectoryExists(destDir)) then
+    if not ForceDirectories(destDir) then
+    begin
+      WriteLn('[B.A.S.H] Could not create assets folder: ', destDir);
+      Exit(False);
+    end;
+
+  url := BASH_ASSETS_RAW + EncodeGitHubPath(relativePath.Replace('\', '/'));
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    code := GetHTTPPageEx(http, url, destPath);
+    Result := (code = 200) and FileExists(destPath);
+    if Result then
+      WriteLn('[B.A.S.H] Downloaded asset: ', relativePath)
+    else
+    begin
+      WriteLn('[B.A.S.H] Asset download failed (HTTP ', code, '): ', relativePath);
+      if FileExists(destPath) then
+        DeleteFile(destPath);
+    end;
+  except
+    WriteLn('[B.A.S.H] Asset download error: ', GetExceptionMessage());
+    if FileExists(destPath) then
+      DeleteFile(destPath);
+    Result := False;
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+procedure EnsureBashUiAssets();
+var
+  ids: TStringArray;
+  i: Int32;
+  id, dest: String;
+begin
+  if not FileExists(BashLogoPath()) then
+  begin
+    dest := BASH_ASSETS_DIR + BASH_LOGO_NAME;
+    DownloadBashAsset(BASH_LOGO_NAME, dest);
+  end;
+
+  ids := String(BASH_ACTIVITY_IDS).Split(',');
+  for i := 0 to High(ids) do
+  begin
+    id := Trim(ids[i]);
+    if id = '' then
+      Continue;
+    if FileExists(ActivityIconPath(id)) then
+      Continue;
+    dest := BASH_ASSETS_DIR + 'activities' + DirectorySeparator + id + '.bmp';
+    DownloadBashAsset('activities/' + id + '.bmp', dest);
+  end;
+end;
+
+procedure TWaspForm.RefreshCategoryChips();
+var
+  panel: TPanel;
+  btn: TButton;
+  ids: TStringArray;
+  i: Int32;
+  name, cat: String;
+begin
+  panel := Self.Form.GetChild('activity_category_panel');
+  if panel = nil then
+    Exit;
+
+  cat := LowerCase(Trim(Self.ActivityCategory));
+  if cat = '' then
+    cat := 'all';
+
+  ids := String(BASH_CATEGORY_IDS).Split(',');
+  for i := 0 to High(ids) do
+  begin
+    name := 'activity_cat_' + ids[i];
+    btn := panel.GetChild(name);
+    if btn = nil then
+      Continue;
+    if ids[i] = cat then
+    begin
+      btn.setColor($3A2E14);
+      btn.SetFontColor($D4A017);
+    end
+    else
+    begin
+      btn.setColor($24201C);
+      btn.SetFontColor($F2EDE4);
+    end;
+  end;
+end;
+
+procedure TWaspForm.RefreshActivityIconLayout();
+var
+  panel, cell: TPanel;
+  ids, showIds: TStringArray;
+  i, ax, aw, ah, gap, iconSize, iconPad: Int32;
+  name, filter, cat: String;
+  showIcons: Boolean;
+begin
+  panel := Self.Form.GetChild('activity_filter_panel');
+  if panel = nil then
+    Exit;
+
+  cat := LowerCase(Trim(Self.ActivityCategory));
+  if cat = '' then
+    cat := 'all';
+  filter := LowerCase(Trim(Self.ActivityFilter));
+  if filter = '' then
+    filter := 'all';
+
+  ids := String(BASH_ACTIVITY_IDS).Split(',');
+  for i := 0 to High(ids) do
+  begin
+    cell := panel.GetChild('activity_btn_' + ids[i]);
+    if cell <> nil then
+      cell.setVisible(False);
+  end;
+
+  showIcons := cat <> 'all';
+  panel.setVisible(showIcons);
+  if not showIcons then
+  begin
+    panel.setHeight(0);
+    Exit;
+  end;
+
+  showIds := GetCategoryActivityIds(cat);
+  iconSize := TControl.AdjustToDPI(25);
+  iconPad := TControl.AdjustToDPI(3);
+  aw := iconSize + (iconPad * 2);
+  ah := iconSize + (iconPad * 2);
+  gap := TControl.AdjustToDPI(4);
+  ax := 0;
+
+  for i := 0 to High(showIds) do
+  begin
+    name := 'activity_btn_' + showIds[i];
+    cell := panel.GetChild(name);
+    if cell = nil then
+      Continue;
+    cell.setVisible(True);
+    cell.SetLeft(ax);
+    cell.SetTop(0);
+    if showIds[i] = filter then
+      cell.setColor($D4A017)
+    else
+      cell.setColor($24201C);
+    ax += aw + gap;
+  end;
+
+  panel.setHeight(ah);
+end;
+
+procedure TWaspForm.RelayoutScriptList();
+var
+  categoryPanel, activityPanel, licensePanel, scriptsPanel: TPanel;
+  scriptPanel, inner, outer: TPanel;
+  listBox: TListBox;
+  captionLabel: TLabel;
+  topY, listHeight, iconRow, darkH, darkW, gap, scriptTop: Int32;
+begin
+  categoryPanel := Self.Form.GetChild('activity_category_panel');
+  activityPanel := Self.Form.GetChild('activity_filter_panel');
+  licensePanel := Self.Form.GetChild('license_panel');
+  scriptsPanel := Self.Form.GetChild('script_list_panel');
+  if (categoryPanel = nil) or (scriptsPanel = nil) or (licensePanel = nil) then
+    Exit;
+
+  gap := TControl.AdjustToDPI(6);
+  topY := categoryPanel.GetTop() + categoryPanel.getHeight() + TControl.AdjustToDPI(4);
+
+  if (activityPanel <> nil) and (LowerCase(Trim(Self.ActivityCategory)) <> 'all') then
+  begin
+    activityPanel.setVisible(True);
+    activityPanel.SetTop(topY);
+    iconRow := activityPanel.getHeight();
+    if iconRow < TControl.AdjustToDPI(31) then
+    begin
+      iconRow := TControl.AdjustToDPI(31);
+      activityPanel.setHeight(iconRow);
+    end;
+    topY := activityPanel.GetTop() + iconRow + TControl.AdjustToDPI(8);
+  end
+  else if activityPanel <> nil then
+  begin
+    activityPanel.setVisible(False);
+    activityPanel.setHeight(0);
+  end;
+
+  scriptsPanel.SetTop(topY);
+  listHeight := licensePanel.GetTop() - topY - gap;
+  if listHeight < 1 then
+    listHeight := 1;
+  scriptsPanel.setHeight(listHeight);
+
+  listBox := scriptsPanel.GetChild('scripts_listbox');
+  if listBox <> nil then
+  begin
+    inner := listBox.getParent();
+    if inner <> nil then
+    begin
+      outer := inner.getParent();
+      captionLabel := scriptsPanel.GetChild('scripts_label');
+      if captionLabel <> nil then
+        darkH := listHeight - captionLabel.getHeight()
+      else
+        darkH := listHeight - TControl.AdjustToDPI(15);
+      if darkH < 1 then
+        darkH := 1;
+      darkW := scriptsPanel.getWidth();
+      if darkW < 1 then
+        darkW := 1;
+
+      if outer <> nil then
+      begin
+        outer.setWidth(darkW);
+        outer.setHeight(darkH);
+      end;
+      inner.setWidth(Max(1, darkW - 4));
+      inner.setHeight(Max(1, darkH - 4));
+      listBox.setWidth(darkW);
+      listBox.setHeight(darkH);
+    end;
+  end;
+
+  scriptPanel := Self.Form.GetChild('script_panel');
+  if scriptPanel <> nil then
+  begin
+    scriptTop := categoryPanel.GetTop() + categoryPanel.getHeight() + TControl.AdjustToDPI(4) - TControl.AdjustToDPI(20);
+    scriptPanel.SetTop(scriptTop);
+    scriptPanel.setHeight(Max(TControl.AdjustToDPI(40), licensePanel.GetTop() - scriptTop));
+  end;
+end;
+
+procedure TWaspForm.PopulateScripts();
+var
+  msPanel: TPanel;
+  scripts: TScriptDataArray;
+  listBox: TListBox;
+  i, idx: Int32;
+  lastKey, filter, category: String;
+begin
+  msPanel := Self.Form.GetChild('main_panel');
+  scripts := BashScriptClient.GetScripts();
+  filter := LowerCase(Trim(Self.ActivityFilter));
+  category := LowerCase(Trim(Self.ActivityCategory));
+  if filter = '' then
+    filter := 'all';
+  if category = '' then
+    category := 'all';
+
+  Self.VisibleScripts := [];
+  for i := 0 to High(scripts) do
+    if ScriptMatchesFilter(scripts[i], filter, category) then
+      Self.VisibleScripts += scripts[i];
+
+  listBox := msPanel.GetChild('scripts_listbox');
+  listBox.Clear();
+  idx := -1;
+
+  if BashScriptClient.IsLocalSource() then
+    lastKey := LauncherConfig.GetString('last_local_script')
+  else
+    lastKey := LauncherConfig.GetString('last_script');
+
+  for i := 0 to High(Self.VisibleScripts) do
+  begin
+    listBox.getItems().Add(Self.VisibleScripts[i].Name);
+    if Self.VisibleScripts[i].ID = lastKey then
+      idx := i;
+  end;
+
+  Self.RefreshCategoryChips();
+  Self.RefreshActivityIconLayout();
+  Self.RelayoutScriptList();
+
+  if listBox.getItems().getCount() = 0 then
+  begin
+    Self._OnScriptChange(listBox);
+    Exit;
+  end;
+
+  if idx = -1 then
+  begin
+    listBox.setItemIndex(0);
+    if BashScriptClient.IsLocalSource() then
+      LauncherConfig.Remove('last_local_script')
+    else
+      LauncherConfig.Remove('last_script');
+  end
+  else
+    listBox.setItemIndex(idx);
+
+  Self._OnScriptChange(listBox);
+end;
+
+procedure TWaspForm._OnCategoryClick(sender: TObject);
+var
+  ctrl: TControl;
+  name, id: String;
+begin
+  ctrl := sender;
+  name := ctrl.getName();
+  if not name.StartsWith('activity_cat_') then
+    Exit;
+  id := Copy(name, Length('activity_cat_') + 1, Length(name));
+  if id = '' then
+    id := 'all';
+  if LowerCase(Trim(Self.ActivityCategory)) = id then
+    Exit;
+  Self.ActivityCategory := id;
+  Self.ActivityFilter := 'all';
+  Self.PopulateScripts();
+end;
+
+procedure TWaspForm._OnActivityFilterClick(sender: TObject);
+var
+  ctrl: TControl;
+  name, id: String;
+begin
+  ctrl := sender;
+  name := ctrl.getName();
+  if name.StartsWith('activity_icon_') then
+    id := Copy(name, Length('activity_icon_') + 1, Length(name))
+  else if name.StartsWith('activity_btn_') then
+    id := Copy(name, Length('activity_btn_') + 1, Length(name))
+  else
+    Exit;
+  if id = '' then
+    Exit;
+
+  if LowerCase(Trim(Self.ActivityFilter)) = id then
+    Self.ActivityFilter := 'all'
+  else
+    Self.ActivityFilter := id;
+  Self.PopulateScripts();
+end;
+
+procedure TWaspForm._OnSourceChange(sender: TObject);
+var
+  radio: TRadioButton;
+  bashRadio, localRadio: TRadioButton;
+  source: EScriptSource;
+  name: String;
+begin
+  name := TControl(sender).getName();
+
+  if name = 'source_local_label' then
+  begin
+    localRadio := Self.Form.GetChild('source_local_radio');
+    if localRadio <> nil then
+      localRadio.SetChecked(True);
+    source := EScriptSource.LOCAL;
+  end
+  else if name = 'source_bash_label' then
+  begin
+    bashRadio := Self.Form.GetChild('source_bash_radio');
+    if bashRadio <> nil then
+      bashRadio.SetChecked(True);
+    source := EScriptSource.BASH;
+  end
+  else
+  begin
+    radio := sender;
+    if name = 'source_local_radio' then
+      source := EScriptSource.LOCAL
+    else
+      source := EScriptSource.BASH;
+
+    if not radio.IsChecked() then
+      Exit;
+  end;
+
+  if source = BashScriptClient.ActiveSource then
+    Exit;
+
+  BashScriptClient.SetActiveSource(source);
+  Self.PopulateScripts();
+end;
+
+procedure TWaspForm._SetDescriptionVisible(visible: Boolean);
+var
+  panel: TPanel;
+begin
+  panel := Self.Form.GetChild('script_omemo_panel');
+  if panel <> nil then
+    panel.setVisible(visible);
+end;
+
+procedure OpenBashDiscord(sender: TObject);
+begin
+  OpenWebPage(BASH_DISCORD_URL);
+end;
+
+procedure TWaspForm._SetDiscordCtaVisible(visible: Boolean);
+var
+  panel, memoOuter, memoInner: TPanel;
+  cta: TLabel;
+  memo: TMemo;
+  memoTop: Int32;
+begin
+  panel := Self.Form.GetChild('script_panel');
+  if panel = nil then Exit;
+
+  cta := panel.GetChild('script_discord_cta_label');
+  if cta <> nil then
+    cta.setVisible(visible);
+
+  memoOuter := panel.GetChild('script_omemo_panel');
+  if memoOuter = nil then Exit;
+
+  if visible then
+    memoTop := TControl.AdjustToDPI(48)
+  else
+    memoTop := TControl.AdjustToDPI(36);
+
+  memoOuter.SetTop(memoTop);
+  memoOuter.setHeight(panel.getHeight() - memoTop);
+
+  memoInner := memoOuter.GetChild('script_imemo_panel');
+  if memoInner <> nil then
+  begin
+    memoInner.setWidth(memoOuter.getWidth() - TControl.AdjustToDPI(2));
+    memoInner.setHeight(memoOuter.getHeight() - TControl.AdjustToDPI(2));
+    memo := memoInner.GetChild('script_content_memo');
+    if memo <> nil then
+    begin
+      memo.setWidth(memoInner.getWidth() + TControl.AdjustToDPI(2));
+      memo.setHeight(memoInner.getHeight() + TControl.AdjustToDPI(2));
+    end;
+  end;
+end;
+
+procedure TWaspForm._OpenScript(sender: TObject);
+var
+  list: TListBox;
+  script: TScriptData;
+  scriptFile: TScriptFile;
+  path: String;
+begin
+  list := sender;
+  if list.getItemIndex() < 0 then Exit;
+  if not Self.GetSelectedScript(script) then Exit;
+
+  if BashScriptClient.IsLocalSource() then
+  begin
+    LauncherConfig.Put('last_local_script', script.ID);
+    path := script.LocalPath;
+    if path = '' then
+      path := script.URL;
+    if (path = '') or (not FileExists(path)) then Exit;
+    SimbaOpenInTab(path);
+    Self.Form.Close();
+    Exit;
+  end;
+
+  LauncherConfig.Put('last_script', script.ID);
+  scriptFile := WaspUpdater.GetScriptFile(script.ID);
+  if (scriptFile.Path = '') or (not FileExists(scriptFile.Path)) then Exit;
+  SimbaOpenInTab(scriptFile.Path);
+  Self.Form.Close();
+end;
+
+procedure TWaspForm._OpenScriptEx(sender: TObject);
+var
+  panel: TPanel;
+begin
+  panel := TButton(sender).getOwner();
+  Self._OpenScript(panel.GetChild('scripts_listbox'));
+end;
+
+procedure TWaspForm._UpdateSRL();
+var
+  panel: TPanel;
+  caption, button: TComponent;
+begin
+  panel := Self.Form.GetChild('current_version_panel');
+  caption := panel.GetChild('current_srl_label');
+  panel := panel.GetOwner();
+  button := panel.GetChild('update_srl_button');
+  WaspUpdater.Update('srlt', caption, button);
+end;
+
+procedure TWaspForm._UpdateWL();
+var
+  panel: TPanel;
+  caption, button: TComponent;
+begin
+  panel := Self.Form.GetChild('current_version_panel');
+  caption := panel.GetChild('current_wl_label');
+  panel := panel.GetOwner();
+  button := panel.GetChild('update_wl_button');
+  WaspUpdater.Update('wasplib', caption, button);
+end;
+
+procedure TWaspForm._UpdateScript();
+var
+  list: TListBox;
+  script: TScriptData;
+  button: TButton;
+  oldCaption: String;
+begin
+  if Self.Updating.Script then Exit;
+  if BashScriptClient.IsLocalSource() then Exit;
+
+  list := Self.Form.GetChild('scripts_listbox');
+  if (list = nil) or (list.getItemIndex() < 0) then Exit;
+
+  if not Self.GetSelectedScript(script) then Exit;
+  if (script.Typ = EScriptType.PREMIUM_NO_SUB) or (script.Typ = EScriptType.TESTING_NO_SUB) or (script.Typ = EScriptType.FULL_NO_SUB) then
+  begin
+    MessageDlg(
+      'B.A.S.H',
+      '"' + script.Name + '" requires an active license key.' + LineEnding +
+      'Enter your key in the License field, then try again.',
+      TMsgDlgType.mtWarning,
+      []
+    );
+    Exit;
+  end;
+
+  button := Self.Form.GetChild('update_script_button');
+  oldCaption := '';
+  if button <> nil then
+  begin
+    oldCaption := button.getCaption();
+    button.setEnabled(False);
+    button.setCaption('Downloading...');
+    button.Repaint();
+  end;
+
+  try
+    Self.Updating.Script := True;
+    WaspUpdater.UpdateScript(script);
+    Self._OnScriptChange(list);
+  finally
+    Self.Updating.Script := False;
+    if (button <> nil) and (oldCaption <> '') and (button.getCaption() = 'Downloading...') then
+    begin
+      button.setCaption(oldCaption);
+      button.setEnabled(True);
+    end;
+  end;
+end;
+
+procedure TWaspForm._SaveLicenseKey(sender: TObject);
+var
+  edit: TEdit;
+  status: TLabel;
+  key: String;
+  scripts: TScriptDataArray;
+begin
+  edit := Self.Form.GetChild('license_key_edit');
+  if edit = nil then Exit;
+
+  key := System.Trim(edit.getText());
+  BashLicenseClient.SetKey(key, True);
+  BashScriptClient.InvalidateCatalog();
+
+  status := Self.Form.GetChild('license_status_label');
+  if key = '' then
+  begin
+    if status <> nil then
+    begin
+      status.setCaption('No license key saved');
+      status.SetFontColor($A89F90);
+    end;
+    Self.PopulateScripts();
+    Exit;
+  end;
+
+  scripts := BashLicenseClient.FetchEntitlements(True);
+  if BashLicenseClient.Valid then
+  begin
+    if status <> nil then
+    begin
+      if BashLicenseClient.ExpiresAt <> '' then
+        status.setCaption('Expires - ' + FormatLicenseExpiryDate(BashLicenseClient.ExpiresAt))
+      else
+        status.setCaption('License active - lifetime');
+      status.SetFontColor($3DCF7A);
+    end;
+  end
+  else
+  begin
+    if status <> nil then
+    begin
+      if BashLicenseClient.LastError = 'license_expired' then
+        status.setCaption('License expired')
+      else
+        status.setCaption('Invalid or revoked key');
+      status.SetFontColor($E85D4C);
+    end;
+    if BashLicenseClient.LastError = 'license_expired' then
+      MessageDlg(
+        'B.A.S.H',
+        'This license key has expired.' + LineEnding +
+        'Local script copies are kept, but premium catalog/updates are unavailable until renewed.',
+        TMsgDlgType.mtWarning,
+        []
+      )
+    else
+      MessageDlg(
+        'B.A.S.H',
+        'License key was rejected.' + LineEnding +
+        'Local script copies are kept, but premium catalog/updates are unavailable.',
+        TMsgDlgType.mtWarning,
+        []
+      );
+  end;
+
+  Self.PopulateScripts();
+end;
+
+procedure TWaspForm._ClearLicenseKey(sender: TObject);
+var
+  edit: TEdit;
+  status: TLabel;
+begin
+  edit := Self.Form.GetChild('license_key_edit');
+  if edit <> nil then
+    edit.setText('');
+
+  BashLicenseClient.ClearKey();
+  BashScriptClient.InvalidateCatalog();
+
+  status := Self.Form.GetChild('license_status_label');
+  if status <> nil then
+  begin
+    status.setCaption('No license key saved');
+    status.SetFontColor($A89F90);
+  end;
+
+  Self.PopulateScripts();
+end;
+
+procedure TWaspForm._OnScriptChange(sender: TObject);
+var
+  list: TListBox;
+  main, panel: TPanel;
+  text: TLabel;
+  memo: TMemo;
+  update, open: TButton;
+  scriptData: TScriptData;
+  scriptFile: TScriptFile;
+  localPath: String;
+  isLocal: Boolean;
+begin
+  list := sender;
+  main := Self.Form.GetChild('main_panel');
+  if main = nil then Exit;
+
+  panel := main.GetChild('version_panel');
+  update := nil;
+  if panel <> nil then
+    update := panel.GetChild('update_script_button');
+  open := main.GetChild('script_open_button');
+
+  if list.getItemIndex() < 0 then
+  begin
+    Self._SetDescriptionVisible(not BashScriptClient.IsLocalSource());
+    Self._SetDiscordCtaVisible(False);
+    if open <> nil then
+    begin
+      open.setEnabled(False);
+      open.setCaption('Open script');
+    end;
+    if update <> nil then
+    begin
+      update.setEnabled(False);
+      if BashScriptClient.IsLocalSource() then
+        update.setCaption('Local')
+      else
+        update.setCaption('Install');
+    end;
+    Exit;
+  end;
+  list.Repaint();
+
+  if not Self.GetSelectedScript(scriptData) then
+    Exit;
+  isLocal := BashScriptClient.IsLocalSource() or (scriptData.Source = EScriptSource.LOCAL);
+
+  if isLocal then
+  begin
+    localPath := scriptData.LocalPath;
+    if localPath = '' then
+      localPath := scriptData.URL;
+
+    Self._SetDescriptionVisible(False);
+    Self._SetDiscordCtaVisible(False);
+
+    if panel <> nil then
+    begin
+      text := panel.GetChild('current_script_label');
+      text.setCaption('local');
+      text.SetFontColor($3DCF7A);
+
+      text := panel.GetChild('latest_script_label');
+      text.setCaption('rev.' + ToStr(Max(scriptData.Revision, 1)));
+      text.SetFontColor($3DCF7A);
+    end;
+
+    if update <> nil then
+    begin
+      update.setCaption('Local');
+      update.setEnabled(False);
+    end;
+
+    if open <> nil then
+    begin
+      open.setEnabled((localPath <> '') and FileExists(localPath));
+      open.setCaption('Open script');
+    end;
+
+    panel := main.GetChild('script_panel');
+    text := panel.GetChild('script_name_label');
+    text.setCaption(scriptData.Name);
+
+    text := panel.GetChild('script_category_label');
+    text.setCaption('Local');
+    text.SetFontColor($A89F90);
+    text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
+    Exit;
+  end;
+
+  Self._SetDescriptionVisible(True);
+  Self._SetDiscordCtaVisible(scriptData.Typ <> EScriptType.FREE);
+
+  scriptFile := WaspUpdater.GetScriptFile(scriptData.ID);
+
+  if panel <> nil then
+  begin
+    text := panel.GetChild('current_script_label');
+    if scriptFile.Revision = 0 then
+      text.setCaption('-')
+    else
+      text.setCaption('rev.' + ToStr(scriptFile.Revision));
+
+    if scriptFile.Revision <> scriptData.Revision then
+      text.SetFontColor($E85D4C)
+    else
+      text.SetFontColor($3DCF7A);
+
+    text := panel.GetChild('latest_script_label');
+    text.setCaption('rev.' + ToStr(scriptData.Revision));
+
+    if scriptFile.Revision <> scriptData.Revision then
+      text.SetFontColor($E85D4C)
+    else
+      text.SetFontColor($3DCF7A);
+  end;
+
+  if update <> nil then
+  begin
+    if (scriptData.Typ = EScriptType.PREMIUM_NO_SUB) or (scriptData.Typ = EScriptType.TESTING_NO_SUB) or (scriptData.Typ = EScriptType.FULL_NO_SUB) then
+    begin
+      update.setCaption('No License');
+      update.setEnabled(False);
+    end
+    else
+    begin
+      update.setEnabled(True);
+      case scriptFile.Revision of
+        0: update.setCaption('Install');
+        scriptData.Revision: update.setCaption('Re-install');
+        else update.setCaption('Update');
+      end;
+    end;
+  end;
+
+  if open <> nil then
+  begin
+    open.setEnabled((scriptFile.Path <> '') and FileExists(scriptFile.Path));
+    open.setCaption('Open script');
+  end;
+
+  panel := main.GetChild('script_panel');
+  text := panel.GetChild('script_name_label');
+  text.setCaption(scriptData.Name);
+
+  text := panel.GetChild('script_category_label');
+  case scriptData.Typ of
+    EScriptType.PREMIUM:
+    begin
+      text.setCaption('Premium');
+      text.SetFontColor($3DCF7A);
+    end;
+    EScriptType.PREMIUM_NO_SUB:
+    begin
+      text.setCaption('Premium - Locked');
+      text.SetFontColor($3084B8);
+    end;
+    EScriptType.TESTING:
+    begin
+      text.setCaption('Testing');
+      text.SetFontColor($3DCF7A);
+    end;
+    EScriptType.TESTING_NO_SUB:
+    begin
+      text.setCaption('Testing - Locked');
+      text.SetFontColor($C8904A);
+    end;
+    EScriptType.FULL:
+    begin
+      text.setCaption('Full');
+      text.SetFontColor($3DCF7A);
+    end;
+    EScriptType.FULL_NO_SUB:
+    begin
+      text.setCaption('Full - No sales');
+      text.SetFontColor($4C5DE8);
+    end;
+    else
+    begin
+      text.setCaption('Free');
+      text.SetFontColor($F2EDE4);
+    end;
+  end;
+  text.setLeft(panel.getWidth() - text.GetTrueWidth() - TControl.AdjustToDPI(5));
+
+  memo := panel.GetChild('script_content_memo');
+  memo.setText(scriptData.Description);
+end;
+
+procedure TWaspForm._OnScriptOnKeyDown(sender: TObject; var key: Char);
+var
+  tmp: Char;
+begin
+  tmp := key;
+  key := #0;
+
+  case tmp of
+    ' ':
+    begin
+      if not BashScriptClient.IsLocalSource() then
+        Self._UpdateScript();
+    end;
+    #13:
+      Self._OpenScript(sender);
+  end;
+end;
+
+procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
+  type TWaspForm = TWaspForm;
+
+  function TWaspForm._VersionsTitleLabel(parent: TPanel; name: String; left: Int32): TPanel;
+  var
+    textLabel: TLabel;
+  begin
+    Result.Create(parent);
+    Result.setName(LowerCase(name) + '_version_title_panel');
+    Result.setCaption('');
+    Result.setWidth(TControl.AdjustToDPI(100));
+    Result.setHeight(parent.GetHeight());
+    Result.SetLeft(left);
+    Result.setBevelWidth(0);
+    Result.setColor($1A1814);
+
+    textLabel.Create(Result);
+    textLabel.setName(LowerCase(name) + '_srl_title_label');
+    textLabel.setCaption(name + ' SRL-B:');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetFontSize(9);
+    textLabel.SetFontColor($A89F90);
+    textLabel.SetFontQuality(TFontQuality.fqCleartype);
+
+    textLabel.Create(Result);
+    textLabel.setName(LowerCase(name) + '_wl_title_label');
+    textLabel.setCaption(name + ' BashLib:');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(20));
+    textLabel.SetFontSize(9);
+    textLabel.SetFontColor($A89F90);
+    textLabel.SetFontQuality(TFontQuality.fqCleartype);
+
+    textLabel.Create(Result);
+    textLabel.setName(LowerCase(name) + '_script_title_label');
+    textLabel.setCaption(name + ' Script:');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(40));
+    textLabel.SetFontSize(9);
+    textLabel.SetFontColor($A89F90);
+    textLabel.SetFontQuality(TFontQuality.fqCleartype);
+  end;
+
+  function TWaspForm._VersionsLabel(parent: TPanel; name, srlt, wl: String; left: Int32): TPanel;
+  var
+    textLabel: TLabel;
+  begin
+    Result.Create(parent);
+    Result.setName(name + '_version_panel');
+    Result.setCaption('');
+    if name = 'current' then
+      Result.setWidth(TControl.AdjustToDPI(90))
+    else
+      Result.setWidth(TControl.AdjustToDPI(70));
+    Result.setHeight(parent.GetHeight());
+    Result.SetLeft(left);
+    Result.setBevelWidth(0);
+    Result.setColor($1A1814);
+
+    textLabel.Create(Result);
+    textLabel.setName(name + '_srl_label');
+    if srlt = '' then
+      textLabel.setCaption('Missing')
+    else if srlt = 'failed' then
+      textLabel.setCaption('Rate limited')
+    else
+      textLabel.setCaption('v.' + srlt);
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetFontSize(9);
+    if srlt <> GitHubClient.Packages.Latest.SRLT then
+      textLabel.SetFontColor($E85D4C)
+    else
+      textLabel.SetFontColor($3DCF7A);
+
+    textLabel.Create(Result);
+    textLabel.setName(name + '_wl_label');
+
+    if wl = '' then
+      textLabel.setCaption('Missing')
+    else if wl = 'failed' then
+      textLabel.setCaption('Rate limited')
+    else
+      textLabel.setCaption('v.' + wl);
+
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(20));
+    textLabel.SetFontSize(9);
+    if wl <> GitHubClient.Packages.Latest.WaspLib then
+      textLabel.SetFontColor($E85D4C)
+    else
+      textLabel.SetFontColor($3DCF7A);
+
+    textLabel.Create(Result);
+    textLabel.setName(name + '_script_label');
+    textLabel.setLeft(TControl.AdjustToDPI(3));
+    textLabel.SetTop(TControl.AdjustToDPI(40));
+    textLabel.SetFontSize(9);
+    textLabel.SetFontColor($F2EDE4);
+  end;
+
+  function TWaspForm._VersionsControls(parent: TPanel; left: Int32): TPanel;
+    type TWaspForm = TWaspForm;
+    procedure TWaspForm._UpdateButton(sender: TObject);
+    begin
+      case TButton(sender).getName() of
+        'update_srl_button':    {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateSRL){$ENDIF};
+        'update_wl_button':     {$IFNDEF DEVELOPER_MODE}Sync(@Self._UpdateWL){$ENDIF};
+        'update_script_button': Self._UpdateScript();
+      end;
+    end;
+
+  var
+    button: TButton;
+  begin
+    Result.Create(parent);
+    Result.setName('version_buttons_panel');
+    Result.setCaption('');
+    Result.SetLeft(left);
+    Result.setWidth(TControl.AdjustToDPI(76));
+    Result.setHeight(parent.GetHeight());
+    Result.setBevelWidth(0);
+    Result.setColor($1A1814);
+
+    button.Create(Result);
+    button.setName('update_srl_button');
+    button.setLeft(TControl.AdjustToDPI(3));
+    button.setHeight(TControl.AdjustToDPI(20));
+    button.setWidth(TControl.AdjustToDPI(70));
+    if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
+      button.setCaption('Update')
+    else
+      button.setCaption('Re-install');
+    button.setOnClick(@Self._UpdateButton);
+
+    button.Create(Result);
+    button.setName('update_wl_button');
+    button.setLeft(TControl.AdjustToDPI(3));
+    button.SetTop(TControl.AdjustToDPI(20));
+    button.setHeight(TControl.AdjustToDPI(20));
+    button.setWidth(TControl.AdjustToDPI(70));
+    if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
+      button.setCaption('Update')
+    else
+      button.setCaption('Re-install');
+    button.setOnClick(@Self._UpdateButton);
+
+    button.Create(Result);
+    button.setName('update_script_button');
+    button.setLeft(TControl.AdjustToDPI(3));
+    button.SetTop(TControl.AdjustToDPI(40));
+    button.setHeight(TControl.AdjustToDPI(20));
+    button.setWidth(TControl.AdjustToDPI(70));
+    button.setCaption('Install');
+    button.setOnClick(@Self._UpdateButton);
+  end;
+
+  var
+  panel, tmp: TPanel;
+  w: Int32;
+begin
+  panel.Create(parent);
+  panel.setName('version_panel');
+  panel.setCaption('');
+  panel.setAlign(TAlign.alCustom);
+  panel.setBorderStyle(TFormBorderStyle.bsNone);
+  panel.setBevelWidth(0);
+  panel.SetTop(top);
+  panel.setHeight(TControl.AdjustToDPI(62));
+  panel.setColor($1A1814);
+
+  tmp := Self._VersionsTitleLabel(panel, 'Current', 0);
+  w := tmp.getWidth();
+  tmp := Self._VersionsLabel(panel, 'current', GitHubClient.Packages.Current.SRLT, GitHubClient.Packages.Current.WaspLib, w);
+  w += tmp.getWidth();
+
+  tmp := Self._VersionsTitleLabel(panel, 'Latest', w);
+  w += tmp.getWidth();
+  tmp := Self._VersionsLabel(panel, 'latest', GitHubClient.Packages.Latest.SRLT, GitHubClient.Packages.Latest.WaspLib, w);
+  w += tmp.getWidth();
+
+  tmp := Self._VersionsControls(panel, w);
+  w += tmp.getWidth();
+
+  panel.setWidth(w + TControl.AdjustToDPI(8));
+  panel.setLeft(Self.Size.X - TControl.AdjustToDPI(24) - panel.getWidth());
+end;
+
+procedure TWaspForm.SetupColorLegend(parent: TPanel);
+var
+  panel, swatch: TPanel;
+  text: TLabel;
+  versionPanel: TPanel;
+  i, y, rowH, sw, legendW: Int32;
+  colors: array[0..4] of TColor;
+  labels: array[0..4] of String;
+begin
+  colors[0] := $F2EDE4; labels[0] := 'Free';
+  colors[1] := $3DCF7A; labels[1] := 'Unlocked';
+  colors[2] := $3084B8; labels[2] := 'Premium';
+  colors[3] := $C8904A; labels[3] := 'Testing';
+  colors[4] := $4C5DE8; labels[4] := 'Full (No Sales)';
+
+  rowH := TControl.AdjustToDPI(16);
+  sw := TControl.AdjustToDPI(10);
+  legendW := TControl.AdjustToDPI(120);
+
+  panel.Create(parent);
+  panel.setName('color_legend_panel');
+  panel.setCaption('');
+  panel.setBevelWidth(0);
+  panel.setColor($1A1814);
+  panel.setWidth(legendW);
+  panel.setHeight(5 * rowH);
+
+  versionPanel := parent.GetChild('version_panel');
+  if versionPanel <> nil then
+  begin
+    panel.SetTop(versionPanel.GetTop() + versionPanel.getHeight() + TControl.AdjustToDPI(15));
+    panel.SetLeft(versionPanel.GetLeft() + versionPanel.getWidth() - legendW + TControl.AdjustToDPI(25));
+  end
+  else
+  begin
+    panel.SetTop(TControl.AdjustToDPI(80));
+    panel.SetLeft(Self.Size.X - TControl.AdjustToDPI(24) - legendW + TControl.AdjustToDPI(20));
+  end;
+
+  y := 0;
+  for i := 0 to 4 do
+  begin
+    swatch.Create(panel);
+    swatch.setName('color_legend_swatch_' + ToStr(i));
+    swatch.setCaption('');
+    swatch.setBevelWidth(0);
+    swatch.setColor(colors[i]);
+    swatch.SetLeft(0);
+    swatch.SetTop(y + ((rowH - sw) div 2));
+    swatch.setWidth(sw);
+    swatch.setHeight(sw);
+
+    text.Create(panel);
+    text.setName('color_legend_label_' + ToStr(i));
+    text.setCaption(labels[i]);
+    text.SetFontSize(8);
+    text.SetFontColor(colors[i]);
+    text.SetFontStyle([TFontStyle.fsBold]);
+    text.SetLeft(sw + TControl.AdjustToDPI(6));
+    text.SetTop(y);
+    y += rowH;
+  end;
+
+  panel.setHeight(y);
+end;
+
+procedure TWaspForm.SetupScriptPanel(parent: TPanel; topLeft: TPoint);
+var
+  panel, memoInnerPanel, memoOutterPanel: TPanel;
+  text: TLabel;
+  memo: TMemo;
+begin
+  panel.Create(parent);
+  panel.setName('script_panel');
+  panel.setCaption('');
+  panel.SetLeft(topLeft.X);
+  panel.SetTop(topLeft.Y);
+  panel.setWidth(Self.Size.X - topLeft.X - TControl.AdjustToDPI(24));
+  panel.setHeight(Self.Size.Y - topLeft.Y - TControl.AdjustToDPI(100));
+  panel.setBevelWidth(0);
+  panel.setColor($1A1814);
+
+  text.Create(panel);
+  text.setName('script_name_label');
+  text.SetFontSize(14);
+  text.SetFontStyle([TFontStyle.fsBold]);
+  text.SetFontColor($F2EDE4);
+  text.setLeft(TControl.AdjustToDPI(4));
+  text.SetTop(TControl.AdjustToDPI(4));
+
+  text.Create(panel);
+  text.setName('script_category_label');
+  text.SetFontSize(10);
+  text.SetFontColor($D4A017);
+  text.setLeft(-TControl.AdjustToDPI(5));
+  text.SetTop(TControl.AdjustToDPI(8));
+
+  text.Create(panel);
+  text.setName('script_discord_cta_label');
+  text.setCaption('Click here to join the Discord to see availability');
+  text.setLeft(TControl.AdjustToDPI(4));
+  text.SetTop(TControl.AdjustToDPI(28));
+  text.SetFontSize(9);
+  text.SetFontColor($D4A017);
+  text.setHint('Open the B.A.S.H Discord');
+  text.setShowHint(True);
+  text.setCursor(crHandPoint);
+  text.setOnClick(@OpenBashDiscord);
+  text.setVisible(False);
+
+  memoOutterPanel.Create(panel);
+  memoOutterPanel.setName('script_omemo_panel');
+  memoOutterPanel.setCaption('');
+  memoOutterPanel.SetTop(TControl.AdjustToDPI(36));
+  memoOutterPanel.setWidth(panel.getWidth());
+  memoOutterPanel.setHeight(panel.getHeight() - memoOutterPanel.GetTop());
+  memoOutterPanel.setBevelWidth(0);
+  memoOutterPanel.setColor($3A342C);
+
+  memoInnerPanel.Create(memoOutterPanel);
+  memoInnerPanel.setName('script_imemo_panel');
+  memoInnerPanel.setCaption('');
+  memoInnerPanel.SetTop(TControl.AdjustToDPI(1));
+  memoInnerPanel.SetLeft(TControl.AdjustToDPI(1));
+  memoInnerPanel.setWidth(memoOutterPanel.getWidth() - TControl.AdjustToDPI(2));
+  memoInnerPanel.setHeight(memoOutterPanel.getHeight() - TControl.AdjustToDPI(2));
+  memoInnerPanel.setBevelWidth(0);
+  memoInnerPanel.setColor($24201C);
+
+  memo.Create(memoInnerPanel);
+  memo.setName('script_content_memo');
+  memo.setLeft(-TControl.AdjustToDPI(1));
+  memo.SetTop(-TControl.AdjustToDPI(1));
+  memo.setWidth(memoInnerPanel.getWidth() + TControl.AdjustToDPI(2));
+  memo.setHeight(memoInnerPanel.getHeight() + TControl.AdjustToDPI(2));
+  memo.setColor($24201C);
+  memo.SetFontColor($F2EDE4);
+  memo.setScrollBars(TScrollStyle.ssAutoBoth);
+  memo.setReadOnly(True);
+  memo.setHideSelection(True);
+  memo.setWordWrap(True);
+end;
+
+procedure TWaspForm.OnDrawItem(control: TWinControl; idx: Integer; rect: TRect; state: TOwnerDrawState);
+var
+  listbox: TListBox;
+  color, fColor: TColor;
+  text: String;
+  textH, textY: Int32;
+begin
+  listbox := control;
+  if listbox.getItems().getCount() = 0 then Exit;
+  if idx = listbox.getItemIndex() then color := $3A342C
+  else if idx mod 2 = 0 then color := $24201C
+  else color := $1A1814;
+
+  fColor := $F2EDE4;
+  if (idx >= 0) and (idx <= High(Self.VisibleScripts)) then
+  begin
+    case Self.VisibleScripts[idx].Typ of
+      EScriptType.PREMIUM,
+      EScriptType.TESTING,
+      EScriptType.FULL: fColor := $3DCF7A;
+      EScriptType.PREMIUM_NO_SUB: fColor := $3084B8;
+      EScriptType.TESTING_NO_SUB: fColor := $C8904A;
+      EScriptType.FULL_NO_SUB: fColor := $4C5DE8;
+    end;
+  end;
+
+  listbox.getCanvas().getBrush().setColor(color);
+  listbox.getCanvas().FillRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
+
+  listbox.getCanvas().GetFont().setColor(fColor);
+  listbox.getCanvas().getFont().setStyle([TFontStyle.fsBold]);
+  text := listbox.getItems().getStrings(idx);
+  textH := listbox.getCanvas().TextHeight(text);
+  textY := rect.Top + ((rect.Bottom - rect.Top) - textH) div 2;
+  if textY < rect.Top then
+    textY := rect.Top;
+  listbox.getCanvas().TextRect(rect, TControl.AdjustToDPI(6), textY, text);
+end;
+
+procedure TWaspForm.SetupScriptsPanel(parent: TPanel);
+  type TWaspForm = TWaspForm;
+
+  procedure TWaspForm._OnBrandingClick(sender: TObject);
+  begin
+    OpenBashDiscord(sender);
+  end;
+
+var
+  panel, accentBar, sourcePanel, licensePanel, activityPanel, activityCell, categoryPanel: TPanel;
+  logo, activityIcon: TImage;
+  branding, subtitle, discordLink, launcherRev, bashLabel, localLabel, licenseStatus, activityCaption: TLabel;
+  button, saveBtn, clearBtn, categoryBtn: TButton;
+  scriptsList: TLabeledDarkListBox;
+  licenseEdit: TLabeledEdit;
+  bashRadio, localRadio: TRadioButton;
+  listTop, footerTop, colGap, logoSize, textLeft, headerBottom, radioTop: Int32;
+  logoPath, iconPath: String;
+  actIds, catIds, catLabels: TStringArray;
+  ai, ax, aw, ah, gap, iconSize, iconPad, catW: Int32;
+begin
+  panel.Create(parent);
+  panel.setName('scripts_panel');
+  panel.setCaption('');
+  panel.setWidth(Self.Size.X);
+  panel.setHeight(Self.Size.Y);
+  panel.setBevelWidth(0);
+  panel.setColor($1A1814);
+
+  Self.ActivityFilter := 'all';
+  Self.ActivityCategory := 'all';
+  Self.VisibleScripts := [];
+
+  logoSize := TControl.AdjustToDPI(125);
+  logo.Create(panel);
+  logo.setName('bash_logo');
+  logo.SetLeft(TControl.AdjustToDPI(16));
+  logo.SetTop(TControl.AdjustToDPI(10));
+  logo.setWidth(logoSize);
+  logo.setHeight(logoSize);
+  logo.SetStretch(True);
+  logo.SetProportional(True);
+  logo.setHint('Open the B.A.S.H Discord');
+  logo.setShowHint(True);
+  logo.setOnClick(@Self._OnBrandingClick);
+
+
+  logoPath := BashLogoPath();
+  if FileExists(logoPath) then
+  begin
+    try
+      logo.getPicture().LoadFromFile(logoPath);
+    except
+
+    end;
+  end;
+
+  textLeft := logo.getLeft() + logo.getWidth() + TControl.AdjustToDPI(14);
+
+  branding.Create(panel);
+  branding.setName('branding_label');
+  branding.setCaption('B.A.S.H');
+  branding.setLeft(textLeft);
+  branding.SetTop(logo.GetTop() + TControl.AdjustToDPI(4));
+  branding.SetFontSize(22);
+  branding.SetFontColor($D4A017);
+  with branding.getFont() do
+    setStyle([TFontStyle.fsBold]);
+  branding.setHint('Open the B.A.S.H Discord');
+  branding.setShowHint(True);
+  branding.setOnClick(@Self._OnBrandingClick);
+
+  subtitle.Create(panel);
+  subtitle.setName('subtitle_label');
+  subtitle.setCaption('BigAussie Script House');
+  subtitle.setLeft(textLeft);
+  subtitle.SetTop(branding.GetTop() + branding.GetTrueHeight() + TControl.AdjustToDPI(2));
+  subtitle.SetFontSize(11);
+  subtitle.SetFontColor($A89F90);
+
+  accentBar.Create(panel);
+  accentBar.setName('accent_bar');
+  accentBar.setCaption('');
+  accentBar.setBevelWidth(0);
+  accentBar.setColor($D4A017);
+  accentBar.setLeft(textLeft);
+  accentBar.SetTop(subtitle.GetTop() + subtitle.GetTrueHeight() + TControl.AdjustToDPI(6));
+  accentBar.setWidth(Max(branding.GetTrueWidth(), subtitle.GetTrueWidth()));
+  accentBar.setHeight(TControl.AdjustToDPI(3));
+
+  discordLink.Create(panel);
+  discordLink.setName('discord_label');
+  discordLink.setCaption('discord.gg/qsmKs5uKfR');
+  discordLink.setLeft(textLeft);
+  discordLink.SetTop(accentBar.GetTop() + accentBar.getHeight() + TControl.AdjustToDPI(6));
+  discordLink.SetFontSize(9);
+  discordLink.SetFontColor($A89F90);
+  discordLink.setHint('Click to join the B.A.S.H Discord.');
+  discordLink.setShowHint(True);
+  discordLink.setCursor(crHandPoint);
+  discordLink.setOnClick(@Self._OnBrandingClick);
+
+  sourcePanel.Create(panel);
+  sourcePanel.setName('script_source_panel');
+  sourcePanel.setCaption('');
+  sourcePanel.setBevelWidth(0);
+  sourcePanel.setColor($1A1814);
+  sourcePanel.SetLeft(textLeft);
+  sourcePanel.SetTop(discordLink.GetTop() + discordLink.getHeight() + TControl.AdjustToDPI(8));
+  sourcePanel.setWidth(TControl.AdjustToDPI(280));
+  sourcePanel.setHeight(TControl.AdjustToDPI(28));
+
+  BashScriptClient.SetActiveSource(EScriptSource.BASH);
+
+  radioTop := TControl.AdjustToDPI(4);
+
+  bashRadio.Create(sourcePanel);
+  bashRadio.setName('source_bash_radio');
+  bashRadio.setCaption('');
+  bashRadio.SetLeft(0);
+  bashRadio.SetTop(radioTop);
+  bashRadio.setWidth(TControl.AdjustToDPI(18));
+  bashRadio.setOnClick(@Self._OnSourceChange);
+  bashRadio.SetChecked(True);
+
+  bashLabel.Create(sourcePanel);
+  bashLabel.setName('source_bash_label');
+  bashLabel.setCaption('B.A.S.H Scripts');
+  bashLabel.SetLeft(bashRadio.GetLeft() + bashRadio.getWidth() + TControl.AdjustToDPI(4));
+  bashLabel.SetTop(radioTop);
+  bashLabel.SetFontColor($FFFFFF);
+  bashLabel.setOnClick(@Self._OnSourceChange);
+
+  localRadio.Create(sourcePanel);
+  localRadio.setName('source_local_radio');
+  localRadio.setCaption('');
+  localRadio.SetLeft(TControl.AdjustToDPI(145));
+  localRadio.SetTop(radioTop);
+  localRadio.setWidth(TControl.AdjustToDPI(18));
+  localRadio.setOnClick(@Self._OnSourceChange);
+  localRadio.SetChecked(False);
+
+  localLabel.Create(sourcePanel);
+  localLabel.setName('source_local_label');
+  localLabel.setCaption('Local Scripts');
+  localLabel.SetLeft(localRadio.GetLeft() + localRadio.getWidth() + TControl.AdjustToDPI(4));
+  localLabel.SetTop(radioTop);
+  localLabel.SetFontColor($FFFFFF);
+  localLabel.setOnClick(@Self._OnSourceChange);
+
+  headerBottom := Max(logo.GetTop() + logo.getHeight(), sourcePanel.GetTop() + sourcePanel.getHeight());
+  listTop := headerBottom + TControl.AdjustToDPI(12);
+  footerTop := panel.getHeight() - TControl.AdjustToDPI(88);
+  colGap := TControl.AdjustToDPI(24);
+
+  licensePanel.Create(panel);
+  licensePanel.setName('license_panel');
+  licensePanel.setCaption('');
+  licensePanel.setBevelWidth(0);
+  licensePanel.setColor($1A1814);
+  licensePanel.SetLeft(TControl.AdjustToDPI(16));
+  licensePanel.setWidth(TControl.AdjustToDPI(280));
+  licensePanel.setHeight(TControl.AdjustToDPI(72));
+  licensePanel.SetTop(panel.getHeight() - TControl.AdjustToDPI(16) - licensePanel.getHeight());
+
+  licenseEdit.Create(licensePanel);
+  licenseEdit.SetCaption('License key');
+  licenseEdit.Caption.SetFontColor($A89F90);
+  licenseEdit.SetTop(0);
+  licenseEdit.SetLeft(0);
+  licenseEdit.SetHeight(TControl.AdjustToDPI(42));
+  licenseEdit.SetWidth(TControl.AdjustToDPI(280));
+  licenseEdit.SetName('license_key');
+  licenseEdit.SetControlColor($24201C);
+  licenseEdit.setControlFontColor($F2EDE4);
+  licenseEdit.SetPasswordChar('*');
+  licenseEdit.SetText(BashLicenseClient.GetKey());
+
+  saveBtn.Create(licensePanel);
+  saveBtn.setName('license_save_button');
+  saveBtn.SetCaption('Save');
+  saveBtn.SetOnClick(@Self._SaveLicenseKey);
+  saveBtn.setWidth(TControl.AdjustToDPI(64));
+  saveBtn.setHeight(TControl.AdjustToDPI(24));
+  saveBtn.SetTop(licenseEdit.GetBottom() + TControl.AdjustToDPI(2));
+  saveBtn.SetLeft(0);
+
+  clearBtn.Create(licensePanel);
+  clearBtn.setName('license_clear_button');
+  clearBtn.SetCaption('Clear');
+  clearBtn.SetOnClick(@Self._ClearLicenseKey);
+  clearBtn.setWidth(TControl.AdjustToDPI(64));
+  clearBtn.setHeight(TControl.AdjustToDPI(24));
+  clearBtn.SetTop(saveBtn.GetTop());
+  clearBtn.SetLeft(saveBtn.GetLeft() + saveBtn.getWidth() + TControl.AdjustToDPI(6));
+
+  licenseStatus.Create(licensePanel);
+  licenseStatus.setName('license_status_label');
+  if BashLicenseClient.HasKey() then
+  begin
+    licenseStatus.setCaption('Key saved - click Save to refresh');
+    licenseStatus.SetFontColor($D4A017);
+  end
+  else
+  begin
+    licenseStatus.setCaption('No license key saved');
+    licenseStatus.SetFontColor($A89F90);
+  end;
+  licenseStatus.SetFontSize(8);
+  licenseStatus.SetTop(saveBtn.GetTop() + TControl.AdjustToDPI(4));
+  licenseStatus.SetLeft(clearBtn.GetLeft() + clearBtn.getWidth() + TControl.AdjustToDPI(8));
+
+  activityCaption.Create(panel);
+  activityCaption.setName('activity_filter_caption');
+  activityCaption.setCaption('Filter by Activity');
+  activityCaption.SetFontColor($A89F90);
+  activityCaption.SetFontSize(9);
+  activityCaption.SetLeft(TControl.AdjustToDPI(16));
+  activityCaption.SetTop(listTop);
+
+  categoryPanel.Create(panel);
+  categoryPanel.setName('activity_category_panel');
+  categoryPanel.setCaption('');
+  categoryPanel.setBevelWidth(0);
+  categoryPanel.setColor($1A1814);
+  categoryPanel.SetLeft(TControl.AdjustToDPI(16));
+  categoryPanel.SetTop(activityCaption.GetTop() + activityCaption.GetTrueHeight() + TControl.AdjustToDPI(4));
+  categoryPanel.setWidth(TControl.AdjustToDPI(280));
+  categoryPanel.setHeight(TControl.AdjustToDPI(24));
+
+  catIds := String(BASH_CATEGORY_IDS).Split(',');
+  catLabels := String(BASH_CATEGORY_LABELS).Split(',');
+  ax := 0;
+  gap := TControl.AdjustToDPI(2);
+  for ai := 0 to High(catIds) do
+  begin
+    if catIds[ai] = 'all' then
+      catW := TControl.AdjustToDPI(20)
+    else if catIds[ai] = 'combat' then
+      catW := TControl.AdjustToDPI(50)
+    else if catIds[ai] = 'gathering' then
+      catW := TControl.AdjustToDPI(58)
+    else if catIds[ai] = 'production' then
+      catW := TControl.AdjustToDPI(66)
+    else if catIds[ai] = 'utility' then
+      catW := TControl.AdjustToDPI(36)
+    else
+      catW := TControl.AdjustToDPI(36);
+
+    categoryBtn.Create(categoryPanel);
+    categoryBtn.setName('activity_cat_' + catIds[ai]);
+    if ai <= High(catLabels) then
+      categoryBtn.SetCaption(catLabels[ai])
+    else
+      categoryBtn.SetCaption(catIds[ai]);
+    categoryBtn.SetLeft(ax);
+    categoryBtn.SetTop(0);
+    categoryBtn.setWidth(catW);
+    categoryBtn.setHeight(TControl.AdjustToDPI(22));
+    categoryBtn.setColor($24201C);
+    categoryBtn.SetFontColor($F2EDE4);
+    categoryBtn.SetFontSize(7);
+    categoryBtn.SetOnClick(@Self._OnCategoryClick);
+    ax += catW + gap;
+  end;
+
+  activityPanel.Create(panel);
+  activityPanel.setName('activity_filter_panel');
+  activityPanel.setCaption('');
+  activityPanel.setBevelWidth(0);
+  activityPanel.setColor($1A1814);
+  activityPanel.SetLeft(TControl.AdjustToDPI(16));
+  activityPanel.SetTop(categoryPanel.GetTop() + categoryPanel.getHeight() + TControl.AdjustToDPI(4));
+  activityPanel.setWidth(TControl.AdjustToDPI(280));
+  activityPanel.setHeight(TControl.AdjustToDPI(31));
+  activityPanel.setVisible(False);
+
+  actIds := String(BASH_ACTIVITY_IDS).Split(',');
+  iconSize := TControl.AdjustToDPI(25);
+  iconPad := TControl.AdjustToDPI(3);
+  aw := iconSize + (iconPad * 2);
+  ah := iconSize + (iconPad * 2);
+  for ai := 0 to High(actIds) do
+  begin
+    activityCell.Create(activityPanel);
+    activityCell.setName('activity_btn_' + actIds[ai]);
+    activityCell.setCaption('');
+    activityCell.setBevelWidth(0);
+    activityCell.SetLeft(0);
+    activityCell.SetTop(0);
+    activityCell.setWidth(aw);
+    activityCell.setHeight(ah);
+    activityCell.setColor($24201C);
+    activityCell.setHint(ActivityLabelForId(actIds[ai]));
+    activityCell.setShowHint(True);
+    activityCell.setOnClick(@Self._OnActivityFilterClick);
+    activityCell.setVisible(False);
+
+    iconPath := ActivityIconPath(actIds[ai]);
+    if FileExists(iconPath) then
+    begin
+      activityIcon.Create(activityCell);
+      activityIcon.setName('activity_icon_' + actIds[ai]);
+      activityIcon.SetLeft(iconPad);
+      activityIcon.SetTop(iconPad);
+      activityIcon.setWidth(iconSize);
+      activityIcon.setHeight(iconSize);
+      activityIcon.SetStretch(True);
+      activityIcon.SetProportional(True);
+      activityIcon.setHint(ActivityLabelForId(actIds[ai]));
+      activityIcon.setShowHint(True);
+      activityIcon.setOnClick(@Self._OnActivityFilterClick);
+      try
+        activityIcon.getPicture().LoadFromFile(iconPath);
+      except
+      end;
+    end;
+  end;
+
+  Self.RefreshCategoryChips();
+  Self.RefreshActivityIconLayout();
+
+  scriptsList.Create(panel);
+  scriptsList.SetName('scripts');
+  scriptsList.Panel.setName('script_list_panel');
+  scriptsList.SetCaption('Scripts');
+  scriptsList.Caption.SetFontColor($A89F90);
+  scriptsList.SetLeft(TControl.AdjustToDPI(16));
+  scriptsList.SetTop(categoryPanel.GetTop() + categoryPanel.getHeight() + TControl.AdjustToDPI(6));
+  scriptsList.SetWidth(TControl.AdjustToDPI(280));
+  scriptsList.setHeight(Max(TControl.AdjustToDPI(120), licensePanel.GetTop() - scriptsList.GetTop() - TControl.AdjustToDPI(6)));
+  scriptsList.ListBox.ListBox.setOnClick(@Self._OnScriptChange);
+  scriptsList.ListBox.ListBox.setOnKeyPress(@Self._OnScriptOnKeyDown);
+  scriptsList.ListBox.ListBox.setStyle(TListBoxStyle.lbOwnerDrawFixed);
+  scriptsList.ListBox.ListBox.setOnDrawItem(@Self.OnDrawItem);
+  scriptsList.ListBox.ListBox.setColor($1A1814);
+
+  Self.RelayoutScriptList();
+
+  Self.SetupVersionsPanel(panel, TControl.AdjustToDPI(12));
+
+  Self.SetupScriptPanel(
+    panel,
+    [
+      scriptsList.GetRight() + colGap,
+      categoryPanel.GetTop() + categoryPanel.getHeight() + TControl.AdjustToDPI(4) - TControl.AdjustToDPI(20)
+    ]
+  );
+
+  if BashScriptClient.IsLocalSource() then
+  begin
+    Self._SetDescriptionVisible(False);
+    Self._SetDiscordCtaVisible(False);
+  end;
+
+  button.Create(panel);
+  button.setName('script_open_button');
+  button.SetCaption('Open script');
+  button.SetOnClick(@Self._OpenScriptEx);
+  button.setWidth(TControl.AdjustToDPI(150));
+  button.setHeight(TControl.AdjustToDPI(25));
+  button.SetTop(footerTop + TControl.AdjustToDPI(35));
+  button.SetLeft(panel.getWidth() - TControl.AdjustToDPI(16) - button.getWidth());
+
+  Self.SetupColorLegend(panel);
+
+  launcherRev.Create(panel);
+  launcherRev.setName('launcher_revision_label');
+  launcherRev.setCaption('Launcher revision: ' + ToStr(WaspUpdater.Launcher.Revision));
+  launcherRev.SetFontSize(9);
+  launcherRev.SetFontColor($A89F90);
+  launcherRev.SetTop(footerTop + TControl.AdjustToDPI(65));
+  launcherRev.setLeft(Self.Size.X div 2 - launcherRev.GetTrueWidth() div 2);
+end;
+
+procedure TWaspForm.SetupMainPanel(form: TForm);
+var
+  panel: TPanel;
+begin
+  panel.Create(form);
+  panel.setName('main_panel');
+  panel.setCaption('');
+  panel.setWidth(Self.Size.X);
+  panel.setHeight(Self.Size.Y);
+  panel.setBevelWidth(0);
+  panel.setColor($1A1814);
+  Self.SetupScriptsPanel(panel);
+end;
+
+procedure TWaspForm.OnShow(sender: TObject);
+var
+  text: TLabel;
+  status: TLabel;
+begin
+  text := Self.Form.GetChild('source_bash_label');
+  if text <> nil then
+    text.SetFontColor($FFFFFF);
+  text := Self.Form.GetChild('source_local_label');
+  if text <> nil then
+    text.SetFontColor($FFFFFF);
+
+  status := Self.Form.GetChild('license_status_label');
+  if (status <> nil) and BashLicenseClient.HasKey() then
+  begin
+    BashLicenseClient.FetchEntitlements(True);
+    if BashLicenseClient.Valid then
+    begin
+      if BashLicenseClient.ExpiresAt <> '' then
+        status.setCaption('Expires - ' + FormatLicenseExpiryDate(BashLicenseClient.ExpiresAt))
+      else
+        status.setCaption('License active - lifetime');
+      status.SetFontColor($3DCF7A);
+    end
+    else
+    begin
+      if BashLicenseClient.LastError = 'license_expired' then
+        status.setCaption('License expired')
+      else
+        status.setCaption('Invalid or revoked key');
+      status.SetFontColor($E85D4C);
+    end;
+  end;
+
+  Self.PopulateScripts();
+end;
+
+procedure TWaspForm.Setup();
+begin
+  Self.Size := [TControl.AdjustToDPI(920), TControl.AdjustToDPI(640)];
+
+  Self.Form.Init(nil);
+  Self.Form.SetName('bash_form');
+  Self.Form.setCaption('B.A.S.H - BigAussie Script House');
+  Self.Form.setWidth(Self.Size.X);
+  Self.Form.setHeight(Self.Size.Y);
+  Self.Form.getConstraints().SetInterfaceConstraints(Self.Size.X, Self.Size.Y, Self.Size.X, Self.Size.Y);
+  Self.Form.setPosition(TPosition.poScreenCenter);
+  Self.Form.setColor($1A1814);
+  Self.Form.setOnShow(@Self.OnShow);
+
+  with Self.Form.getFont() do
+  begin
+    setQuality(TFontQuality.fqAntialiased);
+    setPitch(TFontPitch.fpFixed);
+    SetColor($F2EDE4);
+  end;
+
+  Self.SetupMainPanel(Self.Form);
+end;
+
+procedure TWaspForm.Show();
+begin
+  try
+    Self.Form.ShowModal();
+  except
+    Writeln(GetExceptionMessage());
+  finally
+    Self.Form.Free();
+  end;
+end;
+
+procedure TWaspForm.Run();
+begin
+  Self.Setup();
+  Sync(@Self.Show);
+end;
+
+function BashLauncherPath(): String;
+begin
+  Result := ScriptPath + BASH_LAUNCHER_FILE;
+end;
+
+function ReadScriptHeaderField(path, afterToken, beforeToken: String): String;
+var
+  content: String;
+begin
+  Result := '';
+  if not FileExists(path) then
+    Exit;
+  try
+    content := ReadFileContents(path);
+  except
+    Exit;
+  end;
+  if Length(content) > 8192 then
+    content := Copy(content, 1, 8192);
+  Result := content.After(afterToken).Before(beforeToken);
+end;
+
+function ReadScriptIdFromFile(path: String): String;
+begin
+  Result := ReadScriptHeaderField(path, 'SCRIPT_ID := ''', '''}');
+  if Result = '' then
+    Result := ReadScriptHeaderField(path, 'SCRIPT_ID := "', '"}');
+end;
+
+function ReadScriptRevisionFromFile(path: String): Int32;
+var
+  revStr: String;
+begin
+  revStr := ReadScriptHeaderField(path, 'SCRIPT_REVISION := ''', '''}');
+  if revStr = '' then
+    revStr := ReadScriptHeaderField(path, 'SCRIPT_REVISION := "', '"}');
+  Result := StrToIntDef(revStr, 0);
+end;
+
+function IsBashLauncherFile(path: String): Boolean;
+begin
+  Result := SameText(ReadScriptIdFromFile(path), {$MACRO SCRIPT_ID});
+end;
+
+function WriteBashLauncherFile(dest, body: String): Boolean;
+var
+  tmp, bak, dir: String;
+begin
+  Result := False;
+  if Length(body) < 500 then
+    Exit;
+
+  dir := ExtractFilePath(dest);
+  if (dir <> '') and (not DirectoryExists(dir)) then
+  begin
+    if not ForceDirectories(dir) then
+      Exit;
+  end;
+
+  try
+    if WriteFileContents(dest, body, False) then
+      Exit(True);
+  except
+  end;
+
+  tmp := dest + '.tmp';
+  bak := dest + '.bak';
+  try
+    if FileExists(tmp) then
+      DeleteFile(tmp);
+    if not WriteFileContents(tmp, body, False) then
+      Exit;
+
+    try
+      if FileExists(dest) then
+        WriteFileContents(bak, ReadFileContents(dest), False);
+    except
+    end;
+
+    if FileExists(dest) and (not DeleteFile(dest)) then
+    begin
+      if FileExists(dest + '.new') then
+        DeleteFile(dest + '.new');
+      if not RenameFile(tmp, dest + '.new') then
+        DeleteFile(tmp);
+      Exit;
+    end;
+
+    if RenameFile(tmp, dest) then
+      Exit(True);
+
+    Result := WriteFileContents(dest, body, False);
+    if FileExists(tmp) then
+      DeleteFile(tmp);
+  except
+    if FileExists(tmp) then
+      DeleteFile(tmp);
+  end;
+end;
+
+function DownloadBashLauncherBody(): String;
+var
+  http, code: Int32;
+begin
+  Result := '';
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, 'Accept', '*/*');
+    try
+      SetSocketTimeout(http, 30000);
+    except
+    end;
+    Result := GetHTTPPage(http, BASH_PREMIUM_API + '/v1/launcher/download');
+    code := GetHTTPResponseCode(http);
+    if (code <> 200) or (Length(Result) < 500) then
+      Result := '';
+  except
+    Result := '';
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+procedure FinishBashLauncherRestart();
+begin
+  WriteLn('[B.A.S.H] Restarting launcher, press run twice to start the launcher');
+  try
+    SimbaCloseCurrentTab();
+  except
+  end;
+  TerminateScript();
+end;
+
+procedure EnsureBashLauncherOnDefaultPath();
+var
+  dest, body: String;
+  selfRev, installedRev, fromRev: Int32;
+  needsInstall: Boolean;
+begin
+  dest := BashLauncherPath();
+  if SameText(ScriptFile, dest) then
+    Exit;
+
+  selfRev := StrToIntDef({$MACRO SCRIPT_REVISION}, 1);
+  needsInstall := not IsBashLauncherFile(dest);
+  if not needsInstall then
+  begin
+    installedRev := ReadScriptRevisionFromFile(dest);
+    needsInstall := installedRev < selfRev;
+  end;
+  if not needsInstall then
+    Exit;
+
+  fromRev := ReadScriptRevisionFromFile(dest);
+  if fromRev < 1 then
+    fromRev := 1;
+  WriteLn('[B.A.S.H] Updating Launcher ', fromRev, ' > ', selfRev);
+
+  body := DownloadBashLauncherBody();
+  if Length(body) < 500 then
+  begin
+    try
+      if CopyFile(ScriptFile, dest, False) then
+      begin
+        WriteLn('[B.A.S.H] Launcher installed.');
+        FinishBashLauncherRestart();
+      end;
+    except
+    end;
+
+    try
+      body := ReadFileContents(ScriptFile);
+    except
+      body := '';
+    end;
+  end;
+
+  if WriteBashLauncherFile(dest, body) then
+  begin
+    WriteLn('[B.A.S.H] Launcher installed.');
+    FinishBashLauncherRestart();
+  end;
+
+  WriteLn('[B.A.S.H] Launcher install failed. Close any open wasp-launcher tab and try again.');
+  if FileExists(dest + '.new') then
+    MessageDlg(
+      'B.A.S.H',
+      'Could not replace the default launcher (file is probably open in Simba).' + LineEnding + LineEnding +
+        'Close every tab for wasp-launcher.simba, then either:' + LineEnding +
+        '1) Run this script again, or' + LineEnding +
+        '2) Rename:' + LineEnding + dest + '.new' + LineEnding +
+        '   to wasp-launcher.simba',
+      TMsgDlgType.mtWarning,
+      []
+    )
+  else
+    MessageDlg(
+      'B.A.S.H',
+      'Could not install to:' + LineEnding + dest + LineEnding + LineEnding +
+        'Close any open wasp-launcher.simba tab in Simba and run this again.',
+      TMsgDlgType.mtWarning,
+      []
+    );
+end;
+
+procedure CheckBashLauncherUpdate();
+var
+  http, code, remoteRev, localRev: Int32;
+  response, body, dest: String;
+  json: TJSONObject;
+begin
+  {$IFDEF DEVELOPER_MODE}
+  Exit;
+  {$ENDIF}
+
+  localRev := StrToIntDef({$MACRO SCRIPT_REVISION}, 1);
+  dest := BashLauncherPath();
+  if IsBashLauncherFile(dest) then
+    localRev := Max(localRev, ReadScriptRevisionFromFile(dest));
+
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, 'Accept', 'application/json');
+    try
+      SetSocketTimeout(http, 15000);
+    except
+    end;
+
+    response := GetHTTPPage(http, BASH_PREMIUM_API + '/v1/launcher');
+    code := GetHTTPResponseCode(http);
+    if code = 404 then
+    begin
+      EnsureBashLauncherOnDefaultPath();
+      Exit;
+    end;
+    if code <> 200 then
+    begin
+      EnsureBashLauncherOnDefaultPath();
+      Exit;
+    end;
+
+    try
+      json.Init(response);
+    except
+      EnsureBashLauncherOnDefaultPath();
+      Exit;
+    end;
+
+    try
+      remoteRev := json.optInt('revision', 0);
+    finally
+      json.Free();
+    end;
+
+    if remoteRev <= localRev then
+    begin
+      EnsureBashLauncherOnDefaultPath();
+      Exit;
+    end;
+
+    WriteLn('[B.A.S.H] Updating Launcher ', localRev, ' > ', remoteRev);
+    SetHTTPHeader(http, 'Accept', '*/*');
+    body := GetHTTPPage(http, BASH_PREMIUM_API + '/v1/launcher/download');
+    code := GetHTTPResponseCode(http);
+    if (code <> 200) or (Length(body) < 500) then
+    begin
+      WriteLn('[B.A.S.H] Launcher download failed. Try again later.');
+      Exit;
+    end;
+
+    if not WriteBashLauncherFile(dest, body) then
+    begin
+      if FileExists(dest + '.new') then
+        MessageDlg(
+          'B.A.S.H',
+          'Launcher revision ' + ToStr(remoteRev) + ' was saved as:' + LineEnding +
+            dest + '.new' + LineEnding + LineEnding +
+            'Close all Simba windows, rename that file to wasp-launcher.simba, then press New.',
+          TMsgDlgType.mtWarning,
+          []
+        )
+      else
+        MessageDlg(
+          'B.A.S.H',
+          'Launcher update downloaded but could not be saved to:' + LineEnding + dest,
+          TMsgDlgType.mtWarning,
+          []
+        );
+      Exit;
+    end;
+
+    WriteLn('[B.A.S.H] Launcher installed.');
+    FinishBashLauncherRestart();
+  except
+    WriteLn('[B.A.S.H] Launcher update failed: ', GetExceptionMessage());
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+var
+  WaspForm: TWaspForm;
+
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+
+begin
+  ClearDebug();
+  WaspAsync.Setup();
+  LauncherConfig.Setup(AppPath + 'Configs' + DirectorySeparator + 'bash-launcher.json');
+  BashScriptClient.Setup();
+  BashLicenseClient.Setup();
+  WaspUpdater.Setup();
+  GitHubClient.Setup();
+  CheckBashLauncherUpdate();
+  EnsureBashUiAssets();
+  WaspForm.Run();
+end;
