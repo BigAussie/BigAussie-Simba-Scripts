@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'bfde3085-80dc-4bd6-870a-8cb3186a938c'}
-{$DEFINE SCRIPT_REVISION := '5'}
+{$DEFINE SCRIPT_REVISION := '6'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -23,12 +23,14 @@ const
   WASPLIB_INSTALL_DIR  = 'WaspLib';
   BASH_SCRIPTS_REPO   = 'BigAussie/BigAussie-Simba-Scripts';
   BASH_SCRIPTS_BRANCH = 'main';
+  BASH_LAUNCHER_GITHUB_RAW =
+    'https://raw.githubusercontent.com/BigAussie/BigAussie-Simba-Scripts/main/B.A.S.H%20Launcher.simba';
   WASPSCRIPTS_DIR     = ScriptPath + 'waspscripts.com' + DirectorySeparator;
   BASH_PREMIUM_API    = 'https://bash-premium-api.cdn-gate.workers.dev';
   BASH_DISCORD_URL    = 'https://discord.gg/qsmKs5uKfR';
   BASH_LICENSE_HEADER = 'X-License-Key';
   BASH_INSTALL_HEADER = 'X-Install-Id';
-  BASH_LAUNCHER_FILE  = 'wasp-launcher.simba';
+  BASH_LAUNCHER_FILE  = 'bash-launcher.simba';
   BASH_ACTIVITY_IDS = 'combat,magic,prayer,ranged,farming,fishing,hunter,mining,woodcutting,cooking,crafting,fletching,herblore,runecraft,smithing,agility,construction,firemaking,sailing,slayer,thieving,minigame,bossing';
   BASH_ACTIVITY_LABELS = 'Combat,Magic,Prayer,Ranged,Farming,Fishing,Hunter,Mining,Woodcutting,Cooking,Crafting,Fletching,Herblore,Runecraft,Smithing,Agility,Construction,Firemaking,Sailing,Slayer,Thieving,MiniGames,Bossing';
   BASH_CATEGORY_IDS = 'all,combat,gathering,production,utility,other';
@@ -5051,6 +5053,46 @@ begin
   Result := ScriptPath + BASH_LAUNCHER_FILE;
 end;
 
+function PatchDefaultSimbaToBashLauncher(): Boolean;
+var
+  path, content, updated: String;
+begin
+  Result := False;
+  if not FileExists(BashLauncherPath()) then
+    Exit;
+
+  path := AppPath + 'Data' + DirectorySeparator + 'default.simba';
+  if not FileExists(path) then
+    Exit;
+
+  try
+    content := ReadFileContents(path);
+  except
+    Exit;
+  end;
+
+  if content.Contains('bash-launcher.simba') and (not content.Contains('wasp-launcher.simba')) then
+    Exit(True);
+
+  if not content.Contains('wasp-launcher.simba') then
+    Exit;
+
+  updated := content.Replace('wasp-launcher.simba', 'bash-launcher.simba');
+  try
+    if WriteFileContents(path, updated, False) then
+    begin
+      WriteLn('[B.A.S.H] Updated Data\default.simba to open bash-launcher.simba');
+      Exit(True);
+    end;
+  except
+  end;
+end;
+
+procedure MigrateBashLauncherPaths();
+begin
+  PatchDefaultSimbaToBashLauncher();
+end;
+
 function ReadScriptHeaderField(path, afterToken, beforeToken: String): String;
 var
   content: String;
@@ -5156,15 +5198,99 @@ begin
     SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
     SetHTTPHeader(http, 'Accept', '*/*');
     try
-      SetSocketTimeout(http, 30000);
+      SetSocketTimeout(http, 60000);
     except
     end;
+
+    Result := GetHTTPPage(http, BASH_LAUNCHER_GITHUB_RAW);
+    code := GetHTTPResponseCode(http);
+    if (code = 200) and (Length(Result) >= 500) then
+      Exit;
+
     Result := GetHTTPPage(http, BASH_PREMIUM_API + '/v1/launcher/download');
     code := GetHTTPResponseCode(http);
     if (code <> 200) or (Length(Result) < 500) then
       Result := '';
   except
     Result := '';
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+function DownloadBashLauncherToFile(dest: String): Boolean;
+var
+  http, code: Int32;
+  tmp, dir: String;
+begin
+  Result := False;
+  dir := ExtractFilePath(dest);
+  if (dir <> '') and (not DirectoryExists(dir)) then
+  begin
+    if not ForceDirectories(dir) then
+      Exit;
+  end;
+
+  tmp := dest + '.download';
+  if FileExists(tmp) then
+    DeleteFile(tmp);
+
+  http := InitializeHTTPClient(True);
+  try
+    SetHTTPHeader(http, 'User-Agent', 'B.A.S.H-Launcher');
+    SetHTTPHeader(http, 'Accept', '*/*');
+    try
+      SetSocketTimeout(http, 60000);
+    except
+    end;
+
+    WriteLn('[B.A.S.H] Downloading launcher from GitHub...');
+    code := GetHTTPPageEx(http, BASH_LAUNCHER_GITHUB_RAW, tmp);
+    if (code <> 200) or (not FileExists(tmp)) then
+    begin
+      WriteLn('[B.A.S.H] GitHub download failed (HTTP ', code, ').');
+      if FileExists(tmp) then
+        DeleteFile(tmp);
+      Exit;
+    end;
+
+    try
+      if Length(ReadFileContents(tmp)) < 500 then
+      begin
+        WriteLn('[B.A.S.H] GitHub download was empty/too small.');
+        DeleteFile(tmp);
+        Exit;
+      end;
+    except
+      DeleteFile(tmp);
+      Exit;
+    end;
+
+    if FileExists(dest) and (not DeleteFile(dest)) then
+    begin
+      if FileExists(dest + '.new') then
+        DeleteFile(dest + '.new');
+      if RenameFile(tmp, dest + '.new') then
+        WriteLn('[B.A.S.H] Destination locked; saved as ', dest, '.new')
+      else
+        DeleteFile(tmp);
+      Exit;
+    end;
+
+    if RenameFile(tmp, dest) then
+      Exit(True);
+
+    try
+      Result := CopyFile(tmp, dest, True);
+    except
+      Result := False;
+    end;
+    if FileExists(tmp) then
+      DeleteFile(tmp);
+  except
+    WriteLn('[B.A.S.H] DownloadBashLauncherToFile error: ', GetExceptionMessage());
+    if FileExists(tmp) then
+      DeleteFile(tmp);
   finally
     FreeHTTPClient(http);
   end;
@@ -5183,70 +5309,74 @@ end;
 procedure EnsureBashLauncherOnDefaultPath();
 var
   dest, body: String;
-  selfRev, installedRev, fromRev: Int32;
+  selfRev, fromRev: Int32;
   needsInstall: Boolean;
 begin
   dest := BashLauncherPath();
+  body := '';
+
   if SameText(ScriptFile, dest) then
+  begin
+    MigrateBashLauncherPaths();
     Exit;
+  end;
 
   selfRev := StrToIntDef({$MACRO SCRIPT_REVISION}, 1);
-  needsInstall := not IsBashLauncherFile(dest);
+  needsInstall := not FileExists(dest) or (not IsBashLauncherFile(dest));
   if not needsInstall then
   begin
-    installedRev := ReadScriptRevisionFromFile(dest);
-    needsInstall := installedRev < selfRev;
+    try
+      body := ReadFileContents(dest);
+      needsInstall := body.Contains('BASH_LAUNCHER_FILE') and body.Contains('''wasp-launcher.simba''');
+    except
+    end;
   end;
+
   if not needsInstall then
+  begin
+    MigrateBashLauncherPaths();
     Exit;
+  end;
 
   fromRev := ReadScriptRevisionFromFile(dest);
   if fromRev < 1 then
-    fromRev := 1;
-  WriteLn('[B.A.S.H] Updating Launcher ', fromRev, ' > ', selfRev);
+    fromRev := 0;
+  WriteLn('[B.A.S.H] Installing launcher to ', dest, ' (installed rev ', fromRev, ', local rev ', selfRev, ')');
 
-  body := DownloadBashLauncherBody();
-  if Length(body) < 500 then
+  body := '';
+  if DownloadBashLauncherToFile(dest) then
   begin
-    try
-      if CopyFile(ScriptFile, dest, False) then
-      begin
-        WriteLn('[B.A.S.H] Launcher installed.');
-        FinishBashLauncherRestart();
-      end;
-    except
-    end;
-
-    try
-      body := ReadFileContents(ScriptFile);
-    except
-      body := '';
-    end;
-  end;
-
-  if WriteBashLauncherFile(dest, body) then
-  begin
-    WriteLn('[B.A.S.H] Launcher installed.');
+    WriteLn('[B.A.S.H] Launcher installed from GitHub.');
+    MigrateBashLauncherPaths();
     FinishBashLauncherRestart();
   end;
 
-  WriteLn('[B.A.S.H] Launcher install failed. Close any open wasp-launcher tab and try again.');
+  WriteLn('[B.A.S.H] Direct download failed; trying in-memory download...');
+  body := DownloadBashLauncherBody();
+  if WriteBashLauncherFile(dest, body) then
+  begin
+    WriteLn('[B.A.S.H] Launcher installed.');
+    MigrateBashLauncherPaths();
+    FinishBashLauncherRestart();
+  end;
+
+  WriteLn('[B.A.S.H] Launcher install failed for: ', dest);
   if FileExists(dest + '.new') then
     MessageDlg(
       'B.A.S.H',
-      'Could not replace the default launcher (file is probably open in Simba).' + LineEnding + LineEnding +
-        'Close every tab for wasp-launcher.simba, then either:' + LineEnding +
+      'Downloaded launcher but could not replace the open file.' + LineEnding + LineEnding +
+        'Close every tab for bash-launcher.simba, then either:' + LineEnding +
         '1) Run this script again, or' + LineEnding +
         '2) Rename:' + LineEnding + dest + '.new' + LineEnding +
-        '   to wasp-launcher.simba',
+        '   to bash-launcher.simba',
       TMsgDlgType.mtWarning,
       []
     )
   else
     MessageDlg(
       'B.A.S.H',
-      'Could not install to:' + LineEnding + dest + LineEnding + LineEnding +
-        'Close any open wasp-launcher.simba tab in Simba and run this again.',
+      'Could not download/install launcher to:' + LineEnding + dest + LineEnding + LineEnding +
+        'Check your internet connection and that GitHub is reachable.',
       TMsgDlgType.mtWarning,
       []
     );
@@ -5259,6 +5389,7 @@ var
   json: TJSONObject;
 begin
   {$IFDEF DEVELOPER_MODE}
+  EnsureBashLauncherOnDefaultPath();
   Exit;
   {$ENDIF}
 
@@ -5308,41 +5439,30 @@ begin
       Exit;
     end;
 
-    WriteLn('[B.A.S.H] Updating Launcher ', localRev, ' > ', remoteRev);
+    WriteLn('[B.A.S.H] Remote launcher update ', localRev, ' > ', remoteRev);
     SetHTTPHeader(http, 'Accept', '*/*');
     body := GetHTTPPage(http, BASH_PREMIUM_API + '/v1/launcher/download');
     code := GetHTTPResponseCode(http);
     if (code <> 200) or (Length(body) < 500) then
     begin
-      WriteLn('[B.A.S.H] Launcher download failed. Try again later.');
+      WriteLn('[B.A.S.H] Launcher download failed. Falling back to local install...');
+      EnsureBashLauncherOnDefaultPath();
       Exit;
     end;
 
     if not WriteBashLauncherFile(dest, body) then
     begin
-      if FileExists(dest + '.new') then
-        MessageDlg(
-          'B.A.S.H',
-          'Launcher revision ' + ToStr(remoteRev) + ' was saved as:' + LineEnding +
-            dest + '.new' + LineEnding + LineEnding +
-            'Close all Simba windows, rename that file to wasp-launcher.simba, then press New.',
-          TMsgDlgType.mtWarning,
-          []
-        )
-      else
-        MessageDlg(
-          'B.A.S.H',
-          'Launcher update downloaded but could not be saved to:' + LineEnding + dest,
-          TMsgDlgType.mtWarning,
-          []
-        );
+      WriteLn('[B.A.S.H] Remote write failed. Falling back to local install...');
+      EnsureBashLauncherOnDefaultPath();
       Exit;
     end;
 
     WriteLn('[B.A.S.H] Launcher installed.');
+    MigrateBashLauncherPaths();
     FinishBashLauncherRestart();
   except
     WriteLn('[B.A.S.H] Launcher update failed: ', GetExceptionMessage());
+    EnsureBashLauncherOnDefaultPath();
   finally
     FreeHTTPClient(http);
   end;
