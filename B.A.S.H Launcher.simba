@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'bfde3085-80dc-4bd6-870a-8cb3186a938c'}
-{$DEFINE SCRIPT_REVISION := '7'}
+{$DEFINE SCRIPT_REVISION := '8'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -5053,35 +5053,44 @@ begin
   Result := ScriptPath + BASH_LAUNCHER_FILE;
 end;
 
+function BashDefaultSimbaBody(): String;
+begin
+  Result :=
+    '(* Thank you for choosing B.A.S.H — BigAussie Script House *)' + LineEnding +
+    '(* Discord: https://discord.gg/qsmKs5uKfR *)' + LineEnding +
+    LineEnding +
+    '(* To start simply double click the green play button. *)' + LineEnding +
+    LineEnding +
+    'begin' + LineEnding +
+    '  SimbaRunInTab(ScriptPath + ''bash-launcher.simba'');' + LineEnding +
+    'end.' + LineEnding;
+end;
+
 function PatchDefaultSimbaToBashLauncher(): Boolean;
 var
-  path, content, updated: String;
+  path, content: String;
 begin
   Result := False;
   if not FileExists(BashLauncherPath()) then
     Exit;
 
   path := AppPath + 'Data' + DirectorySeparator + 'default.simba';
-  if not FileExists(path) then
-    Exit;
-
   try
-    content := ReadFileContents(path);
+    if FileExists(path) then
+      content := ReadFileContents(path)
+    else
+      content := '';
   except
-    Exit;
+    content := '';
   end;
 
   if content.Contains('bash-launcher.simba') and (not content.Contains('wasp-launcher.simba')) then
     Exit(True);
 
-  if not content.Contains('wasp-launcher.simba') then
-    Exit;
-
-  updated := content.Replace('wasp-launcher.simba', 'bash-launcher.simba');
   try
-    if WriteFileContents(path, updated, False) then
+    if WriteFileContents(path, BashDefaultSimbaBody(), False) then
     begin
-      WriteLn('[B.A.S.H] Updated Data\default.simba to open bash-launcher.simba');
+      WriteLn('[B.A.S.H] Replaced Data\default.simba to open bash-launcher.simba');
       Exit(True);
     end;
   except
@@ -5298,7 +5307,7 @@ end;
 
 procedure FinishBashLauncherRestart();
 begin
-  WriteLn('[B.A.S.H] Restarting launcher, press run twice to start the launcher');
+  WriteLn('[B.A.S.H] Launcher ready at bash-launcher.simba — press New / play to open it');
   try
     SimbaCloseCurrentTab();
   except
@@ -5306,80 +5315,110 @@ begin
   TerminateScript();
 end;
 
+function InstallBashLauncherToDefaultPath(): Boolean;
+var
+  dest, body: String;
+begin
+  Result := False;
+  dest := BashLauncherPath();
+
+  // Prefer the running file when it is already this launcher (V5 wrote V8 into wasp-launcher.simba).
+  if IsBashLauncherFile(ScriptFile) then
+  begin
+    try
+      body := ReadFileContents(ScriptFile);
+    except
+      body := '';
+    end;
+    if WriteBashLauncherFile(dest, body) then
+    begin
+      WriteLn('[B.A.S.H] Installed launcher to ', dest, ' from running file');
+      Exit(True);
+    end;
+  end;
+
+  if DownloadBashLauncherToFile(dest) then
+  begin
+    WriteLn('[B.A.S.H] Installed launcher to ', dest, ' from GitHub');
+    Exit(True);
+  end;
+
+  body := DownloadBashLauncherBody();
+  if WriteBashLauncherFile(dest, body) then
+  begin
+    WriteLn('[B.A.S.H] Installed launcher to ', dest);
+    Exit(True);
+  end;
+end;
+
 procedure EnsureBashLauncherOnDefaultPath();
 var
   dest, body: String;
-  selfRev, fromRev: Int32;
-  needsInstall: Boolean;
+  selfRev, installedRev: Int32;
+  legacyWasp, needsInstall, looksLikeLegacyWasp: Boolean;
 begin
   dest := BashLauncherPath();
-  body := '';
-
-  if SameText(ScriptFile, dest) then
-  begin
-    MigrateBashLauncherPaths();
-    Exit;
-  end;
-
   selfRev := StrToIntDef({$MACRO SCRIPT_REVISION}, 1);
-  needsInstall := not FileExists(dest) or (not IsBashLauncherFile(dest));
-  if not needsInstall then
+  legacyWasp := SameText(ExtractFileName(ScriptFile), 'wasp-launcher.simba');
+
+  installedRev := ReadScriptRevisionFromFile(dest);
+  looksLikeLegacyWasp := False;
+  if FileExists(dest) and IsBashLauncherFile(dest) then
   begin
     try
       body := ReadFileContents(dest);
-      needsInstall := body.Contains('BASH_LAUNCHER_FILE') and body.Contains('''wasp-launcher.simba''');
+      looksLikeLegacyWasp := body.Contains('BASH_LAUNCHER_FILE') and body.Contains('''wasp-launcher.simba''');
     except
     end;
   end;
 
-  if not needsInstall then
+  needsInstall :=
+    legacyWasp or
+    (not FileExists(dest)) or
+    (not IsBashLauncherFile(dest)) or
+    (installedRev < selfRev) or
+    looksLikeLegacyWasp;
+
+  if needsInstall then
   begin
-    MigrateBashLauncherPaths();
-    Exit;
-  end;
-
-  fromRev := ReadScriptRevisionFromFile(dest);
-  if fromRev < 1 then
-    fromRev := 0;
-  WriteLn('[B.A.S.H] Installing launcher to ', dest, ' (installed rev ', fromRev, ', local rev ', selfRev, ')');
-
-  body := '';
-  if DownloadBashLauncherToFile(dest) then
-  begin
-    WriteLn('[B.A.S.H] Launcher installed from GitHub.');
-    MigrateBashLauncherPaths();
-    FinishBashLauncherRestart();
-  end;
-
-  WriteLn('[B.A.S.H] Direct download failed; trying in-memory download...');
-  body := DownloadBashLauncherBody();
-  if WriteBashLauncherFile(dest, body) then
-  begin
-    WriteLn('[B.A.S.H] Launcher installed.');
-    MigrateBashLauncherPaths();
-    FinishBashLauncherRestart();
-  end;
-
-  WriteLn('[B.A.S.H] Launcher install failed for: ', dest);
-  if FileExists(dest + '.new') then
-    MessageDlg(
-      'B.A.S.H',
-      'Downloaded launcher but could not replace the open file.' + LineEnding + LineEnding +
-        'Close every tab for bash-launcher.simba, then either:' + LineEnding +
-        '1) Run this script again, or' + LineEnding +
-        '2) Rename:' + LineEnding + dest + '.new' + LineEnding +
-        '   to bash-launcher.simba',
-      TMsgDlgType.mtWarning,
-      []
-    )
-  else
-    MessageDlg(
-      'B.A.S.H',
-      'Could not download/install launcher to:' + LineEnding + dest + LineEnding + LineEnding +
-        'Check your internet connection and that GitHub is reachable.',
-      TMsgDlgType.mtWarning,
-      []
+    WriteLn(
+      '[B.A.S.H] Migrating launcher to ', dest,
+      ' (installed rev ', Max(installedRev, 0),
+      ', local rev ', selfRev,
+      ', from ', ExtractFileName(ScriptFile), ')'
     );
+    if not InstallBashLauncherToDefaultPath() then
+    begin
+      WriteLn('[B.A.S.H] Launcher install failed for: ', dest);
+      if FileExists(dest + '.new') then
+        MessageDlg(
+          'B.A.S.H',
+          'Downloaded launcher but could not replace the open file.' + LineEnding + LineEnding +
+            'Close every tab for bash-launcher.simba, then either:' + LineEnding +
+            '1) Run this script again, or' + LineEnding +
+            '2) Rename:' + LineEnding + dest + '.new' + LineEnding +
+            '   to bash-launcher.simba',
+          TMsgDlgType.mtWarning,
+          []
+        )
+      else
+        MessageDlg(
+          'B.A.S.H',
+          'Could not install launcher to:' + LineEnding + dest + LineEnding + LineEnding +
+            'Check your internet connection and that GitHub is reachable.',
+          TMsgDlgType.mtWarning,
+          []
+        );
+      Exit;
+    end;
+  end;
+
+  MigrateBashLauncherPaths();
+
+  // V5 users land here after update wrote V8 into wasp-launcher.simba.
+  // Close so New / play opens bash-launcher via the replaced default.simba.
+  if legacyWasp then
+    FinishBashLauncherRestart();
 end;
 
 procedure CheckBashLauncherUpdate();
@@ -5439,7 +5478,7 @@ begin
       Exit;
     end;
 
-    WriteLn('[B.A.S.H] Remote launcher update ', localRev, ' > ', remoteRev);
+    WriteLn('[B.A.S.H] Remote launcher update ', localRev, ' -> ', remoteRev);
     SetHTTPHeader(http, 'Accept', '*/*');
     body := GetHTTPPage(http, BASH_PREMIUM_API + '/v1/launcher/download');
     code := GetHTTPResponseCode(http);
@@ -5450,6 +5489,7 @@ begin
       Exit;
     end;
 
+    // Always write updates to bash-launcher.simba (never wasp-launcher.simba).
     if not WriteBashLauncherFile(dest, body) then
     begin
       WriteLn('[B.A.S.H] Remote write failed. Falling back to local install...');
@@ -5457,7 +5497,7 @@ begin
       Exit;
     end;
 
-    WriteLn('[B.A.S.H] Launcher installed.');
+    WriteLn('[B.A.S.H] Launcher installed to ', dest);
     MigrateBashLauncherPaths();
     FinishBashLauncherRestart();
   except
