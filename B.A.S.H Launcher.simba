@@ -1,5 +1,5 @@
 {$DEFINE SCRIPT_ID := 'bfde3085-80dc-4bd6-870a-8cb3186a938c'}
-{$DEFINE SCRIPT_REVISION := '6'}
+{$DEFINE SCRIPT_REVISION := '7'}
 
 {.$DEFINE DEVELOPER_MODE}
 
@@ -2992,7 +2992,7 @@ begin
   if Self.Caption <> nil then
   begin
     Self.Caption.setCaption(reason);
-    Self.Caption.SetFontColor($E85D4C);
+    Self.Caption.SetFontColor($4C5DE8);
     Self.Caption.Repaint();
   end;
 
@@ -3028,7 +3028,7 @@ begin
   end;
 
 
-  if (Self.State = EMonitorState.DOWNLOAD) and (Self.StartedAt > 0) and (GetTickCount() - Self.StartedAt > 90000) then
+  if (Self.State = EMonitorState.DOWNLOAD) and (Self.StartedAt > 0) and (GetTickCount() - Self.StartedAt > 120000) then
   begin
     TTimer(sender).SetEnabled(False);
     Self.Fail('Timed out');
@@ -3109,7 +3109,7 @@ begin
             Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.SRLT);
 
           if GitHubClient.Packages.Current.SRLT <> GitHubClient.Packages.Latest.SRLT then
-            Self.Caption.SetFontColor($E85D4C)
+            Self.Caption.SetFontColor($4C5DE8)
           else
             Self.Caption.SetFontColor($3DCF7A);
           Self.Caption.Repaint();
@@ -3123,7 +3123,7 @@ begin
             Self.Caption.setCaption('v.' + GitHubClient.Packages.Current.WaspLib);
 
           if GitHubClient.Packages.Current.WaspLib <> GitHubClient.Packages.Latest.WaspLib then
-            Self.Caption.SetFontColor($E85D4C)
+            Self.Caption.SetFontColor($4C5DE8)
           else
             Self.Caption.SetFontColor($3DCF7A);
           Self.Caption.Repaint();
@@ -3960,7 +3960,7 @@ begin
         status.setCaption('License expired')
       else
         status.setCaption('Invalid or revoked key');
-      status.SetFontColor($E85D4C);
+      status.SetFontColor($4C5DE8);
     end;
     if BashLicenseClient.LastError = 'license_expired' then
       MessageDlg(
@@ -4109,7 +4109,7 @@ begin
       text.setCaption('rev.' + ToStr(scriptFile.Revision));
 
     if scriptFile.Revision <> scriptData.Revision then
-      text.SetFontColor($E85D4C)
+      text.SetFontColor($4C5DE8)
     else
       text.SetFontColor($3DCF7A);
 
@@ -4117,7 +4117,7 @@ begin
     text.setCaption('rev.' + ToStr(scriptData.Revision));
 
     if scriptFile.Revision <> scriptData.Revision then
-      text.SetFontColor($E85D4C)
+      text.SetFontColor($4C5DE8)
     else
       text.SetFontColor($3DCF7A);
   end;
@@ -4282,7 +4282,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
     textLabel.setLeft(TControl.AdjustToDPI(3));
     textLabel.SetFontSize(9);
     if srlt <> GitHubClient.Packages.Latest.SRLT then
-      textLabel.SetFontColor($E85D4C)
+      textLabel.SetFontColor($4C5DE8)
     else
       textLabel.SetFontColor($3DCF7A);
 
@@ -4300,7 +4300,7 @@ procedure TWaspForm.SetupVersionsPanel(parent: TPanel; top: Int32);
     textLabel.SetTop(TControl.AdjustToDPI(20));
     textLabel.SetFontSize(9);
     if wl <> GitHubClient.Packages.Latest.WaspLib then
-      textLabel.SetFontColor($E85D4C)
+      textLabel.SetFontColor($4C5DE8)
     else
       textLabel.SetFontColor($3DCF7A);
 
@@ -5000,7 +5000,7 @@ begin
         status.setCaption('License expired')
       else
         status.setCaption('Invalid or revoked key');
-      status.SetFontColor($E85D4C);
+      status.SetFontColor($4C5DE8);
     end;
   end;
 
